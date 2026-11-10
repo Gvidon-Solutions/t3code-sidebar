@@ -29,6 +29,23 @@ describe("thread tabs", () => {
     expect(state.tabs.map((tab) => tab.path)).not.toContain("f0.md");
   });
 
+  it("stores a resolver target on the tab and keeps it through persistence", () => {
+    const file = {
+      environmentId: "studio",
+      absolutePath: "/data/studio/proj/docs/report.pdf",
+      cwd: "/data/studio/proj",
+      sourceEnvironmentId: "cloudbox",
+      notSynced: true,
+    } as const;
+    const state = openThreadTab(undefined, file.absolutePath, 1, file);
+    expect(state.tabs[0]?.file).toEqual(file);
+    expect(
+      sanitizeThreadTabs({ "cloudbox:thread": { usedAt: 1, tabs: state.tabs } })?.[
+        "cloudbox:thread"
+      ]?.tabs[0]?.file,
+    ).toEqual(file);
+  });
+
   it("drops threads with no tabs and survives a corrupt blob", () => {
     const one = withThreadTabs(undefined, "env:t1", openThreadTab(undefined, "a.md", 1));
     const both = withThreadTabs(one, "env:t2", closeThreadTab(undefined, "x", 2));

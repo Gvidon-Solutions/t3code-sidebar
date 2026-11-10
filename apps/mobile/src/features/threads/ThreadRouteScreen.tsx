@@ -105,6 +105,7 @@ import {
   useRegisterWorkspaceInspector,
 } from "../layout/AdaptiveWorkspaceLayout";
 import { ThreadFileNavigatorPane } from "../files/thread-file-navigator-pane";
+import type { ThreadTabFile } from "../../lib/threadTabs";
 import { isAbsolutePath } from "../files/filePath";
 import {
   ThreadInspectorContentStack,
@@ -195,6 +196,7 @@ type ThreadRouteScreenRouteProps = StaticScreenProps<{
   readonly tab?: string;
   readonly line?: string;
   readonly tabAt?: number;
+  readonly tabFile?: ThreadTabFile;
   readonly prompt?: string | string[];
 }>;
 
@@ -1221,7 +1223,12 @@ function ThreadRouteContent(
       cwd={selectedThreadCwd}
       request={
         params.tab !== undefined
-          ? { path: params.tab, line: params.line ?? null, at: params.tabAt ?? 0 }
+          ? {
+              path: params.tab,
+              line: params.line ?? null,
+              at: params.tabAt ?? 0,
+              ...(params.tabFile === undefined ? {} : { file: params.tabFile }),
+            }
           : null
       }
       chat={
@@ -1238,14 +1245,26 @@ function ThreadRouteContent(
           route={{ params: { ...threadParams, terminalId } }}
         />
       )}
-      renderFile={(path, line) => (
+      renderFile={(path, line, file) => (
         <Suspense fallback={<View className="flex-1 bg-screen" />}>
           <ThreadFileView
             embedded
             route={{
               params: {
                 ...threadParams,
-                path: isAbsolutePath(path) ? path : path.split("/").filter(Boolean),
+                environmentId: file?.environmentId ?? threadParams.environmentId,
+                path: file ? path : isAbsolutePath(path) ? path : path.split("/").filter(Boolean),
+                ...(file?.absolutePath === undefined ? {} : { resolvedPath: file.absolutePath }),
+                ...(file?.cwd === undefined ? {} : { cwd: file.cwd }),
+                ...(file?.sourceEnvironmentId === undefined
+                  ? {}
+                  : { sourceEnvironmentId: file.sourceEnvironmentId }),
+                ...(file?.projectName === undefined ? {} : { projectName: file.projectName }),
+                ...(file?.rawPath === undefined ? {} : { rawPath: file.rawPath }),
+                ...(file?.displayPath === undefined ? {} : { displayPath: file.displayPath }),
+                ...(file?.notSynced ? { notSynced: "1" } : {}),
+                ...(file?.worktreeRemoved ? { worktreeRemoved: "1" } : {}),
+                ...(file?.outsideProject ? { outsideProject: "1" } : {}),
                 ...(line === null ? {} : { line }),
               },
             }}

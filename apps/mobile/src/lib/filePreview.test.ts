@@ -524,11 +524,17 @@ describe("ThreadInlineFilePreview playback", () => {
         }),
       );
       if (playback === "continued playback") {
-        expect(audio.navigate).toHaveBeenCalledExactlyOnceWith("ThreadFile", {
-          environmentId,
-          threadId,
-          path: ["src", "target.ts"],
-        });
+        expect(audio.navigate).toHaveBeenCalledTimes(1);
+        expect(audio.navigate).toHaveBeenCalledWith(
+          "ThreadFile",
+          expect.objectContaining({
+            environmentId,
+            threadId,
+            fileTarget: "resolved",
+            fileEnvironmentId: environmentId,
+            resolvedPath: "/repo/src/target.ts",
+          }),
+        );
         expect(signal.aborted).toBe(false);
       } else {
         expect(audio.navigate).not.toHaveBeenCalled();

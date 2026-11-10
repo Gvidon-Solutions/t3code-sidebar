@@ -267,9 +267,7 @@ import { useV2ItemSupport } from "../../state/v2-item-support";
 import { showFileLocateSheet } from "../files/locateFileSheetState";
 import { filesEnvironment } from "../../state/files";
 import {
-  basename,
   fileRoutePathSegments,
-  isAbsolutePath,
   resolveFileLinkPath,
   resolveWorkspaceRelativeFilePath,
 } from "../files/filePath";
@@ -2907,69 +2905,42 @@ export const ThreadFeed = memo(function ThreadFeed({
         readonly inProject?: boolean;
         readonly cwd?: string;
         readonly projectTitle?: string;
+        readonly rawPath?: string;
+        readonly displayPath?: string;
       }) => {
         if (request.signal.aborted) return;
         void Haptics.selectionAsync();
         const sameMachine = String(target.environmentId) === String(props.environmentId);
-        // Outside the project the parent folder is the read root, so the absolute machine
-        // path never becomes a route segment.
         const outside = target.inProject === false;
-        const parent =
-          outside && target.absolutePath.lastIndexOf("/") > 0
-            ? target.absolutePath.slice(0, target.absolutePath.lastIndexOf("/"))
-            : null;
-        const base = sameMachine ? props.workspaceRoot : target.root;
-        const routePath =
-          (base === undefined || base === null
-            ? null
-            : resolveWorkspaceRelativeFilePath(base, target.absolutePath)) ?? target.absolutePath;
-        // Outside the project, and when the worktree is gone, the route's selected folder
-        // is not a reliable root, so carry the absolute path itself.
-        const absoluteRoute = outside || target.worktreeRemoved === true;
-        const routeParam = absoluteRoute
-          ? target.absolutePath
-          : isAbsolutePath(routePath)
-            ? [routePath]
-            : fileRoutePathSegments(routePath);
-        if (outside || target.worktreeRemoved === true) {
-          const root = outside
-            ? parent
-            : (target.cwd ?? target.root ?? props.workspaceRoot ?? null);
-          const relative =
-            (root === null ? null : resolveWorkspaceRelativeFilePath(root, target.absolutePath)) ??
-            target.absolutePath;
-          navigation.navigate("ThreadFile", {
-            environmentId: String(target.environmentId),
-            sourceEnvironmentId: String(props.environmentId),
-            ...(root === null
-              ? {}
-              : {
-                  cwd: root,
-                  projectName: target.projectTitle ?? basename(root),
-                }),
-            path: fileRoutePathSegments(relative),
-            ...(target.line === undefined ? {} : { line: String(target.line) }),
-            ...(target.worktreeRemoved ? { worktreeRemoved: "1" } : {}),
-            ...(target.notSynced ? { notSynced: "1" } : {}),
-            ...(target.outsideProject ? { outsideProject: "1" } : {}),
-          });
-          return;
-        }
+        const cwd =
+          target.root ?? props.workspaceRoot ?? (sameMachine ? props.workspaceRoot : null) ?? "";
+        const displayPath =
+          target.displayPath ??
+          (cwd === "" ? null : resolveWorkspaceRelativeFilePath(cwd, target.absolutePath)) ??
+          target.absolutePath;
+        const relativeTabPath =
+          cwd === "" ? null : resolveWorkspaceRelativeFilePath(cwd, target.absolutePath);
+        const tabPath =
+          sameMachine && !outside && target.worktreeRemoved !== true && relativeTabPath !== null
+            ? relativeTabPath
+            : target.absolutePath;
         navigation.navigate("ThreadFile", {
-          environmentId: String(target.environmentId),
-          ...(sameMachine
-            ? { threadId: String(props.threadId) }
-            : {
-                sourceEnvironmentId: String(props.environmentId),
-                cwd: target.root ?? "/",
-                projectName:
-                  target.root === undefined ? String(target.environmentId) : basename(target.root),
-              }),
-          path: routeParam,
+          // The thread's machine keeps this route under the thread, so it joins the pager tab.
+          environmentId: String(props.environmentId),
+          threadId: String(props.threadId),
+          fileTarget: "resolved",
+          fileEnvironmentId: String(target.environmentId),
+          path: tabPath,
+          resolvedPath: target.absolutePath,
+          ...(cwd === "" ? {} : { cwd }),
+          sourceEnvironmentId: String(props.environmentId),
+          ...(target.projectTitle === undefined ? {} : { projectName: target.projectTitle }),
+          ...(target.rawPath === undefined ? {} : { rawPath: target.rawPath }),
+          ...(displayPath === null ? {} : { displayPath }),
           ...(target.line === undefined ? {} : { line: String(target.line) }),
           ...(target.worktreeRemoved ? { worktreeRemoved: "1" } : {}),
           ...(target.notSynced ? { notSynced: "1" } : {}),
-          ...(target.outsideProject ? { outsideProject: "1" } : {}),
+          ...(outside ? { outsideProject: "1" } : {}),
         });
       };
       void executeAtomQuery(
@@ -3008,12 +2979,14 @@ export const ThreadFeed = memo(function ThreadFeed({
               absolutePath: target.absolutePath,
               ...(target.line === undefined ? {} : { line: target.line }),
               ...(target.root === undefined ? {} : { root: target.root }),
+              ...(result.cwd === undefined ? {} : { cwd: result.cwd }),
+              ...(result.projectTitle === undefined ? {} : { projectTitle: result.projectTitle }),
               ...(result.worktreeRemoved ? { worktreeRemoved: true } : {}),
               ...(target.notSynced ? { notSynced: true } : {}),
               ...(target.inProject ? {} : { outsideProject: true }),
               ...(target.inProject === undefined ? {} : { inProject: target.inProject }),
-              ...(result.cwd === undefined ? {} : { cwd: result.cwd }),
-              ...(result.projectTitle === undefined ? {} : { projectTitle: result.projectTitle }),
+              rawPath: presentation.path,
+              displayPath: target.displayPath,
             });
             return;
           }

@@ -5,6 +5,7 @@ import { Modal, Pressable, ScrollView, View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
 import { relativeTime } from "../../lib/time";
 import { useWorkspaceEnvironments } from "../../state/workspace";
+import { MachineTag } from "../workspaces/MachineTag";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { hideFileLocateSheet, useFileLocateSheetRequest } from "./locateFileSheetState";
 
@@ -31,6 +32,7 @@ export function FileLocateSheetHost() {
   const candidates: ReadonlyArray<FilesLocateCandidate> =
     result.candidates ?? (result.target === undefined ? [] : [result.target]);
   const mixedMachines = new Set(candidates.map((candidate) => candidate.environmentId)).size > 1;
+  const cwd = result.cwd;
   const open = (candidate: FilesLocateCandidate) => {
     hideFileLocateSheet();
     request.openTarget({
@@ -38,18 +40,36 @@ export function FileLocateSheetHost() {
       absolutePath: candidate.absolutePath,
       ...(candidate.line === undefined ? {} : { line: candidate.line }),
       ...(candidate.root === undefined ? {} : { root: candidate.root }),
+      rawPath: request.rawPath,
+      displayPath: candidate.displayPath,
+      ...(result.projectTitle === undefined ? {} : { projectTitle: result.projectTitle }),
+      inProject: candidate.inProject,
+      ...(candidate.notSynced ? { notSynced: true } : {}),
     });
   };
+  const checkedMachines = [
+    ...new Set([
+      result.environmentId,
+      ...result.tried.flatMap((entry) =>
+        entry.environmentId === undefined ? [] : [entry.environmentId],
+      ),
+    ]),
+  ]
+    .map((environmentId) => machineOf(environmentId).tag)
+    .join(", ");
   return (
     <Modal transparent animationType="fade" visible onRequestClose={hideFileLocateSheet}>
-      <Pressable className="flex-1 justify-center bg-black/40 px-4" onPress={hideFileLocateSheet}>
-        <Pressable className="max-h-[80%] rounded-2xl bg-sheet p-4" onPress={() => undefined}>
+      <Pressable className="flex-1 justify-center bg-black/60 px-4" onPress={hideFileLocateSheet}>
+        <Pressable
+          className="max-h-[80%] rounded-2xl border border-border bg-sheet-solid p-4"
+          onPress={() => undefined}
+        >
           {result.status === "choose" ? (
             <>
               <Text className="text-lg font-t3-bold text-foreground">Which file?</Text>
-              <Text className="mt-1 text-sm text-muted-foreground">
-                Several files match{" "}
-                <Text className="font-mono text-foreground">{request.rawPath}</Text>.
+              <Text className="mt-1 text-sm text-foreground-muted">Several files match</Text>
+              <Text className="mt-1 font-mono text-sm text-foreground" selectable>
+                {request.rawPath}
               </Text>
               <ScrollView className="mt-3">
                 {candidates.map((candidate, index) => {
@@ -59,8 +79,8 @@ export function FileLocateSheetHost() {
                     <Pressable
                       key={`${candidate.environmentId}:${candidate.absolutePath}`}
                       accessibilityState={{ selected: best }}
-                      className={`rounded-lg border px-2 py-2 ${
-                        best ? "border-ring bg-accent/40" : "border-transparent"
+                      className={`mb-1 rounded-xl border px-3 py-2 ${
+                        best ? "border-ring bg-accent" : "border-border"
                       }`}
                       onPress={() => open(candidate)}
                     >
@@ -72,24 +92,24 @@ export function FileLocateSheetHost() {
                           {candidate.displayPath}
                         </Text>
                         {best ? (
-                          <Text className="rounded bg-primary px-1 text-2xs text-primary-foreground">
+                          <Text className="rounded bg-primary px-1 py-0.5 text-2xs text-primary-foreground">
                             Best match
                           </Text>
                         ) : null}
-                        {mixedMachines || otherMachine || candidate.notSynced ? (
-                          <Text className="rounded bg-muted px-1 text-2xs text-muted-foreground">
-                            {machineOf(candidate.environmentId).tag}
-                            {candidate.notSynced ? " · not synced" : ""}
-                          </Text>
-                        ) : null}
                       </View>
-                      <Text className="text-2xs text-muted-foreground">
-                        {candidate.touchedByThread ? "edited in this thread · " : ""}
-                        {otherMachine ? `${machineOf(candidate.environmentId).label} · ` : ""}
-                        {candidate.mtimeMs === undefined
-                          ? "No modification time"
-                          : relativeTime(new Date(candidate.mtimeMs).toISOString())}
-                      </Text>
+                      <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                        {mixedMachines || otherMachine || candidate.notSynced ? (
+                          <MachineTag machine={machineOf(candidate.environmentId)} />
+                        ) : null}
+                        {candidate.touchedByThread ? (
+                          <Text className="text-2xs text-foreground">edited in this thread</Text>
+                        ) : null}
+                        <Text className="text-2xs text-foreground-muted">
+                          {candidate.mtimeMs === undefined
+                            ? "No modification time"
+                            : relativeTime(new Date(candidate.mtimeMs).toISOString())}
+                        </Text>
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -98,42 +118,33 @@ export function FileLocateSheetHost() {
           ) : (
             <>
               <Text className="text-lg font-t3-bold text-foreground">File not found</Text>
-              <Text className="mt-1 text-sm text-muted-foreground">
-                Couldn&apos;t find{" "}
-                <Text className="font-mono text-foreground">{request.rawPath}</Text> in{" "}
-                {result.projectTitle ?? machineOf(result.environmentId).label}
-                {result.tried.length > 0
-                  ? ` (checked ${[
-                      ...new Set([
-                        result.environmentId,
-                        ...result.tried.flatMap((entry) =>
-                          entry.environmentId === undefined ? [] : [entry.environmentId],
-                        ),
-                      ]),
-                    ]
-                      .map((environmentId) => machineOf(environmentId).tag)
-                      .join(", ")})`
-                  : ""}
-                .
+              <Text className="mt-1 text-sm text-foreground-muted">Couldn&apos;t find</Text>
+              <Text className="mt-1 font-mono text-sm text-foreground" selectable>
+                {request.rawPath}
               </Text>
-              <View className="mt-4 flex-row gap-2">
+              <Text className="mt-1 text-sm text-foreground-muted">
+                in {result.projectTitle ?? machineOf(result.environmentId).label}
+                {result.tried.length > 0 ? ` (checked ${checkedMachines})` : ""}.
+              </Text>
+              <View className="mt-4 flex-row flex-wrap gap-2">
                 <Pressable
-                  className="rounded-lg bg-accent px-3 py-2"
+                  className="rounded-lg bg-primary px-3 py-2"
                   onPress={() => {
                     hideFileLocateSheet();
                     request.search(basenameOf(request.rawPath));
                   }}
                 >
-                  <Text className="text-sm text-foreground">Search in project</Text>
+                  <Text className="text-sm text-primary-foreground">Search in project</Text>
                 </Pressable>
-                {result.cwd === undefined ? null : (
+                {cwd === undefined ? null : (
                   <Pressable
                     className="rounded-lg border border-border px-3 py-2"
                     onPress={() => {
+                      if (cwd === undefined) return;
                       hideFileLocateSheet();
                       request.openTarget({
                         environmentId: result.environmentId,
-                        absolutePath: result.cwd!,
+                        absolutePath: cwd,
                       });
                     }}
                   >
@@ -144,7 +155,7 @@ export function FileLocateSheetHost() {
             </>
           )}
           <Pressable className="mt-4 self-end px-2 py-1" onPress={hideFileLocateSheet}>
-            <Text className="text-sm text-muted-foreground">Cancel</Text>
+            <Text className="text-sm text-foreground">Cancel</Text>
           </Pressable>
         </Pressable>
       </Pressable>

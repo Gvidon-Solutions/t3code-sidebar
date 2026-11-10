@@ -7,6 +7,7 @@ import {
   openThreadTab,
   updateThreadTab,
   withThreadTabs,
+  type ThreadTabFile,
   type ThreadTabMode,
   type ThreadTabsState,
 } from "../../lib/threadTabs";
@@ -40,7 +41,8 @@ export function useThreadTabs(threadKey: string | null) {
   return useMemo(
     () => ({
       tabs: state?.tabs ?? [],
-      open: (path: string) => write((current) => openThreadTab(current, path, Date.now())),
+      open: (path: string, file?: ThreadTabFile) =>
+        write((current) => openThreadTab(current, path, Date.now(), file)),
       close: (path: string) => write((current) => closeThreadTab(current, path, Date.now())),
       setMode: (path: string, mode: ThreadTabMode) =>
         write((current) => updateThreadTab(current, path, { mode }, Date.now())),

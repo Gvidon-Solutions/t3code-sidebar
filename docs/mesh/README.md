@@ -227,6 +227,9 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   ranged requests over the peer link. `ui_open` and `t3ctl open-file` call the same resolver and
   return its outcome; `t3_files_locate`/`t3ctl locate` expose it to agents. Web
   `FileLocateDialogHost` and mobile `FileLocateSheet` render the choose and not-found states.
+  On Android every resolver outcome joins the thread's pager as a file tab (`ThreadTabFile`
+  stores the resolved environment, absolute path, root and notices); a full-screen viewer is
+  used only when no thread is open. `threadFileTab` is the one tested route→tab mapping.
   A removed worktree falls back to the project root and reports `worktreeRemoved` once.
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
   `apps/server/src/provider/agentContextBudget.json`; update it to the measured size when you add

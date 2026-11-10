@@ -35,6 +35,7 @@ import {
   type ThreadPagerTerminal,
 } from "./threadPagerContext";
 import { mergeTerminalTabIds, terminalIdFromTabKey, terminalTabKey } from "./terminalTabs";
+import type { ThreadTabFile } from "../../lib/threadTabs";
 import { ThreadFilesDrawer } from "./ThreadFilesDrawer";
 import { WorkspaceDrawer } from "./WorkspaceDrawer";
 
@@ -57,9 +58,10 @@ export function ThreadPager(props: {
     readonly path: string;
     readonly line: string | null;
     readonly at: number;
+    readonly file?: ThreadTabFile;
   } | null;
   readonly chat: ReactNode;
-  readonly renderFile: (path: string, line: string | null) => ReactNode;
+  readonly renderFile: (path: string, line: string | null, file?: ThreadTabFile) => ReactNode;
   /** Live shells of the thread, from the server, so desktop terminals show up too. */
   readonly terminals: ReadonlyArray<ThreadPagerTerminal>;
   readonly renderTerminal: (terminalId: string, active: boolean) => ReactNode;
@@ -174,20 +176,32 @@ export function ThreadPager(props: {
 
   // Opening a tab rewrites the tabs, so goTo reads them through a ref to stay stable.
   const openTabRef = useRef(threadTabs.open);
+  // The tab store lands a render later; remember a requested target for the first paint.
+  const [pendingFiles, setPendingFiles] = useState<ReadonlyMap<string, ThreadTabFile>>(new Map());
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest tab opener for the stable goTo that gestures and routes call
   useLayoutEffect(() => {
     openTabRef.current = threadTabs.open;
   }, [threadTabs.open]);
-  const goTo = useCallback((path: string | null, line: string | null = null) => {
-    const terminalId = terminalIdFromTabKey(path);
-    if (terminalId !== null) {
-      setRequestedTerminals((current) =>
-        current.includes(terminalId) ? current : [...current, terminalId],
-      );
-    } else if (path !== null) openTabRef.current(path);
-    activeSeen.current = false;
-    setActive({ path, line });
-  }, []);
+  const goTo = useCallback(
+    (path: string | null, line: string | null = null, file?: ThreadTabFile) => {
+      const terminalId = terminalIdFromTabKey(path);
+      if (terminalId !== null) {
+        setRequestedTerminals((current) =>
+          current.includes(terminalId) ? current : [...current, terminalId],
+        );
+      } else if (path !== null) {
+        if (file !== undefined) {
+          setPendingFiles((current) => new Map(current).set(path, file));
+        }
+        openTabRef.current(path, file);
+      }
+      activeSeen.current = false;
+      setActive({ path, line });
+    },
+    [setPendingFiles],
+  );
+  const fileFor = (path: string) =>
+    threadTabs.tabs.find((tab) => tab.path === path)?.file ?? pendingFiles.get(path);
   const onCloseTerminal = props.onCloseTerminal;
   const forgetTerminal = useCallback((terminalId: string) => {
     setRequestedTerminals((current) => current.filter((id) => id !== terminalId));
@@ -208,7 +222,7 @@ export function ThreadPager(props: {
 
   const requestAt = props.request?.at;
   const openRequest = useEffectEvent(() => {
-    if (props.request) goTo(props.request.path, props.request.line);
+    if (props.request) goTo(props.request.path, props.request.line, props.request.file);
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens a tab requested through navigation route params
   useEffect(() => {
@@ -397,7 +411,11 @@ export function ThreadPager(props: {
                   <PageEdgesProvider path={path} onEdges={reportEdges}>
                     {terminalId !== null
                       ? props.renderTerminal(terminalId, page === index)
-                      : props.renderFile(path, path === active.path ? active.line : null)}
+                      : props.renderFile(
+                          path,
+                          path === active.path ? active.line : null,
+                          fileFor(path),
+                        )}
                   </PageEdgesProvider>
                 </View>
               );

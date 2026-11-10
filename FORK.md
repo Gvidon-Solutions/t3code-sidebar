@@ -109,6 +109,27 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-10 — Every file opens as a thread tab
+
+- **What.** Every resolver outcome now opens the thread's file tab, keeping the tab strip:
+  same machine, another machine, a picker choice, a `t3-file:` link, a file outside the
+  project and a removed worktree. The tab keeps the resolved (environmentId, absolutePath),
+  the machine tag and the "Not synced · from X" / "Worktree removed" / "Outside project"
+  notes inside its content. A full-screen viewer remains only when no thread is open.
+  Android's picker and not-found sheets wrap the path on its own line, use the theme's
+  secondary text colour, show relative times, machine tags and a preselected best match.
+  `xdev` is merged in (desktop server UI, one configurable machine tag, drain fix);
+  `FileMachineTag` draws the shared mobile `MachineTag`.
+- **How.** `ThreadTabFile` rides the pager tab (resolved across restart), `ThreadFileScreen`
+  maps a resolver route to that tab, and `ThreadRouteScreen` renders the embedded viewer on
+  the file's machine with its own root. `threadFileTab` is the tested mapping for every
+  outcome. The sheets use a solid card, separate text lines and shared machine tags.
+- **Where.** mobile `lib/{threadTabs,threadFileTab}.ts`,
+  `features/panels/ThreadPager.tsx`, `features/tabs/{useThreadTabs,ThreadTabStrip}.ts(x)`,
+  `features/threads/{ThreadFeed,ThreadRouteScreen}.tsx`,
+  `features/files/{ThreadFilesRouteScreen,FileLocateSheet,locateFileSheetState}.tsx|ts`,
+  `features/workspaces/FileMachineTag.tsx`; `FORK.md`, `docs/mesh/README.md`.
+
 ### 2026-11-09 — Any file opens from anywhere
 
 - **What.** A file link, inline code path, `ui_open`, `t3ctl open-file` or Files row resolves on
