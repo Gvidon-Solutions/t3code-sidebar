@@ -72,6 +72,7 @@ vi.mock(import("../../hooks/useMeshLayout"), () => ({
     source: "local",
     edit: mocks.edit,
   })) as never,
+  useMeshLayoutOptional: (() => ({ config: reviewConfig() })) as never,
 }));
 vi.mock(import("../../hooks/useMeshOverview"), () => ({
   useMeshOverview: () => ({

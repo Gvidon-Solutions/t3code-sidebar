@@ -12,6 +12,12 @@ vi.mock(import("../../hooks/useMeshLayout"), () => ({
       machines: { remote: { label: "Build machine", tag: "BLD" } },
     },
   })) as never,
+  useMeshLayoutOptional: (() => ({
+    config: {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: { remote: { label: "Build machine", tag: "BLD" } },
+    },
+  })) as never,
 }));
 vi.mock(import("../../state/environments"), async (original) => ({
   ...(await original()),

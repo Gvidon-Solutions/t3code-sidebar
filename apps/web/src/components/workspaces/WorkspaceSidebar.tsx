@@ -1711,7 +1711,6 @@ export default function WorkspaceSidebar() {
               </span>
             ) : null}
             <ProjectMachineStrip
-              compact={folder.label.length > 20}
               model={projectMachineStrip(
                 config,
                 {
