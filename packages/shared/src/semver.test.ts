@@ -91,6 +91,12 @@ describe("semver helpers", () => {
     expect(isStrictlyNewerSemver("0.1.7", "shell-1")).toBe(false);
     expect(isStrictlyNewerSemver("", "0.1.6")).toBe(false);
     expect(isStrictlyNewerSemver("0.1.7", "  ")).toBe(false);
+    // The fork orders `-sidebar.N` builds numerically; a plain upstream release is
+    // semver-newer than any prerelease of the same upstream version.
+    expect(isStrictlyNewerSemver("0.1.7-sidebar.100", "0.1.7-sidebar.72")).toBe(true);
+    expect(isStrictlyNewerSemver("0.1.7-sidebar.72", "0.1.7-sidebar.100")).toBe(false);
+    expect(isStrictlyNewerSemver("0.1.7", "0.1.7-sidebar.100")).toBe(true);
+    expect(isStrictlyNewerSemver("0.1.7-sidebar.100", "0.1.7")).toBe(false);
   });
 
   it("keeps the range checker stringifiable and executable as plain JavaScript", () => {

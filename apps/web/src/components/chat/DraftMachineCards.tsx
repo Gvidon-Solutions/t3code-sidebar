@@ -136,19 +136,23 @@ export function DraftMachineCards(props: {
     : fallbackLogicalKey();
   const reachability = Object.fromEntries(
     machines.map((machine) => {
+      const linkedPeer = machine.linkedWith.find((peer) => {
+        const other = machines.find((candidate) => candidate.environmentId === peer.environmentId);
+        return other !== undefined && meshMachineReachable(other, machines, nowMs);
+      });
       const source =
         machine.network?.state === "relayed"
           ? machine.network.via
-          : machine.network?.sourceEnvironmentId;
+          : (machine.network?.sourceEnvironmentId ?? linkedPeer?.environmentId);
       const via =
         source === undefined
-          ? (machine.linkedWith[0]?.label ?? null)
+          ? null
           : (machines.find((other) => other.environmentId === source)?.label ?? null);
       const offline = machine.network?.state === "offline";
       return [
         machine.environmentId,
         {
-          reachable: meshMachineReachable(machine),
+          reachable: meshMachineReachable(machine, machines, nowMs),
           viaLabel: via,
           offline,
           offlineText: offline

@@ -547,27 +547,49 @@ export function offlineMeshEnvironmentIds(
     .map((machine) => machine.environmentId);
 }
 
+/** How long an exchange still counts as a live mesh signal. */
+const MESH_MACHINE_REACHABLE_FRESHNESS_MS = 2 * 60_000;
+
 /** What the UI needs to know about one machine's reachability. */
 export interface MeshMachineReachability {
   readonly connectedHere?: boolean;
-  readonly network?: { readonly state: string } | null | undefined;
-  readonly linkedWith?: readonly unknown[] | undefined;
+  readonly network?:
+    | {
+        readonly state: string;
+        readonly sourceEnvironmentId?: string | null | undefined;
+        readonly via?: string | null | undefined;
+      }
+    | null
+    | undefined;
+  readonly linkedWith?: ReadonlyArray<{ readonly environmentId: string }> | undefined;
   readonly lastExchangeAt?: string | null | undefined;
+}
+
+function hasLiveMeshSignal(machine: MeshMachineReachability, now: number): boolean {
+  if (machine.network?.state === "offline") return false;
+  if (machine.connectedHere === true) return true;
+  if (machine.network?.state === "direct" || machine.network?.state === "relayed") return true;
+  if (machine.lastExchangeAt == null) return false;
+  const exchangedAt = Date.parse(machine.lastExchangeAt);
+  return Number.isFinite(exchangedAt) && now - exchangedAt <= MESH_MACHINE_REACHABLE_FRESHNESS_MS;
 }
 
 /**
  * A machine this client can use: its own connections, a direct or relayed peer, or a
- * machine the mesh holds a live link to. An offline machine is never reachable.
+ * fresh exchange through a linked peer that is itself reachable. An offline machine is
+ * never reachable, and a stale or merely configured link does not count.
  */
-export function meshMachineReachable(machine: MeshMachineReachability): boolean {
+export function meshMachineReachable(
+  machine: MeshMachineReachability,
+  peers: ReadonlyArray<{ readonly environmentId: string } & MeshMachineReachability> = [],
+  now = DateTime.toEpochMillis(DateTime.nowUnsafe()),
+): boolean {
+  if (hasLiveMeshSignal(machine, now)) return true;
   if (machine.network?.state === "offline") return false;
-  return (
-    machine.connectedHere === true ||
-    machine.network?.state === "direct" ||
-    machine.network?.state === "relayed" ||
-    (machine.linkedWith?.length ?? 0) > 0 ||
-    machine.lastExchangeAt != null
-  );
+  return (machine.linkedWith ?? []).some((linked) => {
+    const peer = peers.find((candidate) => candidate.environmentId === linked.environmentId);
+    return peer !== undefined && hasLiveMeshSignal(peer, now);
+  });
 }
 
 /**
@@ -576,8 +598,11 @@ export function meshMachineReachable(machine: MeshMachineReachability): boolean 
  */
 export function reachableMeshEnvironmentIds(
   machines: ReadonlyArray<{ readonly environmentId: string } & MeshMachineReachability>,
+  now = DateTime.toEpochMillis(DateTime.nowUnsafe()),
 ): string[] {
-  return machines.filter(meshMachineReachable).map((machine) => machine.environmentId);
+  return machines
+    .filter((machine) => meshMachineReachable(machine, machines, now))
+    .map((machine) => machine.environmentId);
 }
 
 /** One machine's configured name and offline age, e.g. "laptop is offline · 3 min". */

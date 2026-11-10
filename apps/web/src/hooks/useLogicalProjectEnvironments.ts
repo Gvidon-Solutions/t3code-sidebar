@@ -58,7 +58,7 @@ export function useLogicalProjectEnvironments(
     const connected = environment?.connection.phase === "connected";
     const meshMachine = meshMachines.find((machine) => machine.environmentId === environmentId);
     const reachable =
-      connected === true || (meshMachine ? meshMachineReachable(meshMachine) : false);
+      connected === true || (meshMachine ? meshMachineReachable(meshMachine, meshMachines) : false);
     const source =
       meshMachine?.network?.state === "relayed"
         ? meshMachine.network.via

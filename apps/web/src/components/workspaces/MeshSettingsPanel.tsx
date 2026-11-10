@@ -54,6 +54,7 @@ import {
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { isServerUiWindow } from "../../lib/serverUiReconnect";
 import { MachineTag } from "./MachineTag";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
@@ -486,7 +487,7 @@ export function MeshSettingsPanel() {
           >
             Link a machine
           </Button>
-          {connectPlan.needed ? (
+          {connectPlan.needed && !isServerUiWindow() ? (
             <Button
               size="sm"
               variant="outline"

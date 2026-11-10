@@ -1,3 +1,4 @@
+import * as DateTime from "effect/DateTime";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   type SidebarWorkspacesConfig,
@@ -26,6 +27,7 @@ import {
   offlineComposerPlaceholder,
   offlineMeshEnvironmentIds,
   reachableMeshEnvironmentIds,
+  meshMachineReachable,
   meshMachineOfflineText,
   meshLinkedWithText,
   offlineMachinePrompt,
@@ -849,6 +851,31 @@ describe("offline conversation", () => {
       ]),
     ).toEqual(["studio", "laptop", "cloudbox"]);
     expect(meshMachineOfflineText(machines[0]!, now)).toBe("laptop is offline · 3 min");
+  });
+
+  it("counts only a fresh exchange or a reachable linked peer", () => {
+    const now = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-11-10T12:00:00.000Z"));
+    const stale = DateTime.formatIso(DateTime.makeUnsafe(now - 10 * 60_000));
+    const fresh = DateTime.formatIso(DateTime.makeUnsafe(now - 30_000));
+    expect(meshMachineReachable({ network: null, lastExchangeAt: stale }, [], now)).toBe(false);
+    expect(meshMachineReachable({ network: null, lastExchangeAt: fresh }, [], now)).toBe(true);
+    expect(
+      meshMachineReachable(
+        { network: null, linkedWith: [{ environmentId: "studio" }] },
+        [{ environmentId: "studio", connectedHere: true }],
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      meshMachineReachable(
+        { network: null, linkedWith: [{ environmentId: "studio" }] },
+        [{ environmentId: "studio", network: { state: "offline" } }],
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      meshMachineReachable({ network: { state: "offline" }, lastExchangeAt: fresh }, [], now),
+    ).toBe(false);
   });
 
   it("marks project rows as last known while the machine is offline", () => {

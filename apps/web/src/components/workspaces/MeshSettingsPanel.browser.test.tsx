@@ -13,7 +13,7 @@ import * as Option from "effect/Option";
 import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
-import { render } from "../../../test/render";
+import { render, stubGlobal } from "../../../test/render";
 import { MeshSettingsPanel } from "./MeshSettingsPanel";
 
 const mocks = vi.hoisted(() => ({
@@ -154,6 +154,23 @@ it("shows each machine as a name with one plain status sentence", async () => {
   await expect.element(screen.getByText("Online", { exact: true }).first()).toBeVisible();
   await expect.element(screen.getByText("Unknown", { exact: true })).not.toBeInTheDocument();
   await expect.element(screen.getByText("0.1.5", { exact: true })).not.toBeInTheDocument();
+});
+
+it("offers Connect to all machines only where it can act", async () => {
+  mocks.review = false;
+  mocks.collision = false;
+  mocks.link = false;
+  mocks.edit.mockReset();
+  await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
+  await expect
+    .element(screen.getByRole("button", { name: "Connect to all machines" }))
+    .toBeVisible();
+
+  using _shell = stubGlobal("desktopShell", { origin: "https://studio.example/" });
+  await using serverScreen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
+  await expect
+    .element(serverScreen.getByRole("button", { name: "Connect to all machines" }))
+    .not.toBeInTheDocument();
 });
 
 it("offers an agent setup button instead of a config editor", async () => {
