@@ -100,6 +100,7 @@ import {
   type ServerProvider,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
+  AssetPeerFileAccessError,
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
   SOURCE_CONTROL_MEDIA_ASSET,
@@ -221,6 +222,9 @@ import { parseBase64DataUrl } from "./imageMime.ts";
 import { deletePendingAttachment, issueAttachmentUploadUrl } from "./assets/AttachmentUpload.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as FileLocator from "./files/FileLocator.ts";
+import { peerFilePathAllowed, peerTargetAllowed } from "./files/PeerFileAccess.ts";
+import { McpInvocationContext } from "./mcp/McpInvocationContext.ts";
+import { linkPermissions } from "./mesh/MeshLinkPermissions.ts";
 import { locateContextFor } from "./files/locateContext.ts";
 import * as FilesRpc from "./files/FilesRpc.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
@@ -3144,7 +3148,6 @@ export const layerWsRpc = (
               input.resource._tag === "attachment" ||
               input.resource._tag === "native-app-icon" ||
               input.resource._tag === "tool-output-image" ||
-              input.resource._tag === "peer-file" ||
               input.resource._tag === SOURCE_CONTROL_MEDIA_ASSET ||
               // A network path is served only from the thread's project, looked up below.
               (input.resource._tag === "media-file" &&
@@ -3152,6 +3155,40 @@ export const layerWsRpc = (
                 !isNetworkPath(input.resource.path))
             ) {
               return yield* issueAssetUrl({ resource: input.resource });
+            }
+            if (input.resource._tag === "peer-file") {
+              const resource = input.resource;
+              const self = mesh.environmentId;
+              const snapshot = yield* mesh.read;
+              if (
+                !peerTargetAllowed(
+                  self,
+                  resource.environmentId,
+                  Object.keys(snapshot.config.machines),
+                )
+              ) {
+                return yield* new AssetPeerFileAccessError({ resource });
+              }
+              const invocation = yield* Effect.serviceOption(McpInvocationContext);
+              if (Option.isSome(invocation) && invocation.value.client?.linked === true) {
+                const permissions = yield* linkPermissions();
+                const roots = Object.values(snapshot.config.projectMounts)
+                  .flat()
+                  .filter((rep) => rep.environmentId === resource.environmentId)
+                  .map((rep) => rep.path);
+                if (
+                  !peerFilePathAllowed({
+                    linked: true,
+                    files: permissions.files,
+                    access: invocation.value.client.access,
+                    absolutePath: resource.path,
+                    projectRoots: roots,
+                  })
+                ) {
+                  return yield* new AssetPeerFileAccessError({ resource });
+                }
+              }
+              return yield* issueAssetUrl({ resource });
             }
             if (input.resource._tag === "draft-workspace-file") {
               return yield* issueAssetUrl({

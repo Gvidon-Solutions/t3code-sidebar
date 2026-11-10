@@ -33,6 +33,14 @@ describe("inlineCodeFilePathCandidate", () => {
     ["package.json", "package.json"],
     ["Makefile", "Makefile"],
     ["README.md", "README.md"],
+    ["index.js", "index.js"],
+    ["console.log", null],
+    ["array.map", null],
+    ["this.state", null],
+    ["JSON.parse", null],
+    ["Node.js", null],
+    ["os.path", null],
+    ["foo.bar", null],
     ["v1.2.3", null],
   ])("distinguishes file paths from code and hostnames in %s", (source, candidate) => {
     expect(inlineCodeFilePathCandidate(source)).toBe(candidate);

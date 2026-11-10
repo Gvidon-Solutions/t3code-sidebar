@@ -18,6 +18,7 @@ import {
   meshSshHost,
   machineLinkLabel,
   normalizeMachineName,
+  openFileLocateLines,
   parseArgs,
   resolveMachineRef,
   threadDeepLink,
@@ -349,4 +350,28 @@ NodeTest.test("mesh status link rows name the configured machine, not the hostna
   ];
   NodeAssert.equal(machineLinkLabel(machines, "env-2"), "cloudbox");
   NodeAssert.equal(machineLinkLabel(machines, "env-unknown"), "env-unknown");
+});
+
+NodeTest.test("H4 open-file reports a choice instead of pretending it opened", () => {
+  const choose = openFileLocateLines({
+    status: "choose",
+    candidates: [
+      { absolutePath: "/srv/a/x.ts", environmentId: "studio" },
+      { absolutePath: "/srv/b/x.ts", environmentId: "cloudbox" },
+    ],
+  });
+  NodeAssert.equal(choose[0], "needs choice: 2 matches (a picker was sent to the client)");
+  NodeAssert.deepEqual(choose.slice(1), [
+    "  /srv/a/x.ts  [studio]",
+    "  /srv/b/x.ts  [cloudbox]",
+  ]);
+  NodeAssert.deepEqual(
+    openFileLocateLines({ status: "notFound", tried: [{ tier: "suffix" }, { tier: "basename" }] }),
+    ["not found: tried suffix, basename"],
+  );
+  NodeAssert.deepEqual(
+    openFileLocateLines({ status: "found", target: { absolutePath: "/srv/a/x.ts", environmentId: "studio" } }),
+    ["opened: /srv/a/x.ts on studio"],
+  );
+  NodeAssert.deepEqual(openFileLocateLines(undefined), []);
 });

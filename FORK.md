@@ -118,7 +118,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   notes inside its content. A full-screen viewer remains only when no thread is open.
   Android's picker and not-found sheets wrap the path on its own line, use the theme's
   secondary text colour, show relative times, machine tags and a preselected best match.
-  `xdev` is merged in (desktop server UI, one configurable machine tag, drain fix);
+  The desktop-files branch is merged in (desktop server UI, one configurable machine tag, drain fix);
   `FileMachineTag` draws the shared mobile `MachineTag`.
 - **How.** `ThreadTabFile` rides the pager tab (resolved across restart), `ThreadFileScreen`
   maps a resolver route to that tab, and `ThreadRouteScreen` renders the embedded viewer on

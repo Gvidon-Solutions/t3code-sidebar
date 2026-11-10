@@ -32,6 +32,8 @@ export const UiOpenTarget = Schema.Union([
     path: TrimmedNonEmptyString,
     line: Schema.optional(PositiveInt),
     environmentId: Schema.optionalKey(EnvironmentId),
+    /** What the asking server's resolver found; clients show the picker/not-found or open the target. */
+    resolved: Schema.optionalKey(FilesLocateResult),
   }),
   Schema.Struct({
     kind: Schema.Literal("diff"),

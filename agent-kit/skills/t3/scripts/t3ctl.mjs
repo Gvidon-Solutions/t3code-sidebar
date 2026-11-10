@@ -1885,6 +1885,22 @@ function placeProject(cfg, key, root, ids, scratch = false) {
 
 const THREAD_ORGANIZE = ["pin", "unpin", "settle", "unsettle", "archive", "unarchive", "unsnooze"];
 
+/** Human lines for the `open-file` locate outcome; H4 never reports a choice as opened. */
+export function openFileLocateLines(locate) {
+  if (!locate) return [];
+  if (locate.status === "notFound") {
+    return [`not found: tried ${locate.tried.map((entry) => entry.tier).join(", ") || "nothing"}`];
+  }
+  if (locate.status === "choose") {
+    const candidates = locate.candidates ?? [];
+    return [
+      `needs choice: ${candidates.length} matches (a picker was sent to the client)`,
+      ...candidates.map((candidate) => `  ${candidate.absolutePath}  [${candidate.environmentId}]`),
+    ];
+  }
+  return locate.target ? [`opened: ${locate.target.absolutePath} on ${locate.target.environmentId}`] : [];
+}
+
 const commands = {
   agents: async (pos, opt) => {
     const client = await mcp();
@@ -3170,19 +3186,7 @@ const commands = {
         note: ui.note,
       });
     console.log(`${path}${line ? `:${line}` : ""}  [${machine.tag}] ${machine.label}`);
-    if (ui.locate) {
-      if (ui.locate.status === "notFound") {
-        console.log(
-          `not found: tried ${ui.locate.tried.map((entry) => entry.tier).join(", ") || "nothing"}`,
-        );
-      } else if (ui.locate.target) {
-        console.log(
-          `opened: ${ui.locate.target.absolutePath} on ${ui.locate.target.environmentId} (${ui.locate.status})`,
-        );
-      } else if (ui.locate.candidates) {
-        console.log(`choose one of ${ui.locate.candidates.length} matches`);
-      }
-    }
+    for (const line of openFileLocateLines(ui.locate)) console.log(line);
     console.log(`link:  ${link}`);
     if (ui.clients !== null) console.log(`opened on ${ui.clients} client(s)`);
     if (ui.note) console.log(ui.note);

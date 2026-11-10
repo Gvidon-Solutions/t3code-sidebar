@@ -6,6 +6,12 @@ export interface FileLocateOpenTarget {
   readonly absolutePath: string;
   readonly line?: number;
   readonly root?: string;
+  readonly rawPath?: string;
+  readonly displayPath?: string;
+  readonly projectTitle?: string;
+  readonly inProject?: boolean;
+  readonly notSynced?: boolean;
+  readonly worktreeRemoved?: boolean;
 }
 
 export interface FileLocateDialogRequest {

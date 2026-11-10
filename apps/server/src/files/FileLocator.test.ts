@@ -409,4 +409,87 @@ it.layer(baseLayer, { excludeTestServices: true })("FileLocator", (it) => {
       expect(result.target?.absolutePath).toBe(target);
     }),
   );
+
+  it.effect("M1 · a pathful query maps to another representation before basename fallback", () =>
+    Effect.gen(function* () {
+      const projectRoot = yield* tempDir;
+      const replicaRoot = yield* tempDir;
+      yield* writeFile(projectRoot, "apps/report.pdf");
+      const remote = yield* writeFile(replicaRoot, "dist/report.pdf");
+      const result = yield* locate(
+        { self: studio, projectRoot, replicaRoot },
+        { rawPath: "dist/report.pdf" },
+        { cwd: projectRoot, worktreePath: null, projectRoot, touchedPaths: [] },
+      );
+      expect(result.status).toBe("found");
+      expect(result.target?.environmentId).toBe(cloudbox);
+      expect(result.target?.absolutePath).toBe(remote);
+    }),
+  );
+
+  it.effect("M1 · a pathful query never opens an unrelated same-basename file", () =>
+    Effect.gen(function* () {
+      const projectRoot = yield* tempDir;
+      yield* writeFile(projectRoot, "apps/report.pdf");
+      const result = yield* locate(
+        { self: studio, projectRoot },
+        { rawPath: "dist/report.pdf" },
+        { cwd: projectRoot, worktreePath: null, projectRoot, touchedPaths: [] },
+      );
+      expect(result.status).toBe("notFound");
+    }),
+  );
+
+  it.effect("M2 · an absolute path under a removed worktree maps to the project root", () =>
+    Effect.gen(function* () {
+      const projectRoot = yield* tempDir;
+      const target = yield* writeFile(projectRoot, "src/app.ts");
+      const worktree = `${projectRoot}-gone`;
+      const result = yield* locate(
+        { self: studio, projectRoot },
+        { rawPath: `${worktree}/src/app.ts` },
+        { cwd: worktree, worktreePath: worktree, projectRoot, touchedPaths: [] },
+      );
+      expect(result.status).toBe("found");
+      expect(result.worktreeRemoved).toBe(true);
+      expect(result.target?.absolutePath).toBe(target);
+    }),
+  );
+
+  it.effect("M3 · a touched match survives the candidate cap", () =>
+    Effect.gen(function* () {
+      const projectRoot = yield* tempDir;
+      const entries: string[] = [];
+      for (let index = 0; index < 60; index += 1) {
+        const directory = `d${String(index).padStart(2, "0")}`;
+        yield* writeFile(projectRoot, `${directory}/amb.ts`);
+        entries.push(`${directory}/amb.ts`);
+      }
+      const target = `${projectRoot}/d59/amb.ts`;
+      const result = yield* locate(
+        { self: studio, projectRoot },
+        { rawPath: "amb.ts" },
+        { cwd: projectRoot, worktreePath: null, projectRoot, touchedPaths: ["d59/amb.ts"] },
+      );
+      expect(result.status).toBe("found");
+      expect(result.target?.absolutePath).toBe(target);
+      expect(result.target?.touchedByThread).toBe(true);
+    }),
+  );
+
+  it.effect("M4 · a file in the worktree displays relative to it", () =>
+    Effect.gen(function* () {
+      const projectRoot = yield* tempDir;
+      const worktree = yield* tempDir;
+      const target = yield* writeFile(worktree, "src/app.ts");
+      const result = yield* locate(
+        { self: studio, projectRoot },
+        { rawPath: target },
+        { cwd: worktree, worktreePath: worktree, projectRoot, touchedPaths: [] },
+      );
+      expect(result.status).toBe("found");
+      expect(result.target?.displayPath).toBe("src/app.ts");
+      expect(result.target?.root).toBe(worktree);
+    }),
+  );
 });

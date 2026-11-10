@@ -891,7 +891,11 @@ function useChatMarkdownState({
           ...(result.worktreeRemoved ? { worktreeRemoved: true } : {}),
           ...(result.projectTitle === undefined ? {} : { projectTitle: result.projectTitle }),
         });
-        if (target.environmentId !== threadRef.environmentId) {
+        if (
+          target.environmentId !== threadRef.environmentId &&
+          fileLinkMeta.environmentId === undefined &&
+          !target.notSynced
+        ) {
           const identityLabel =
             appAtomRegistry
               .get(environmentSummaries.identitiesAtom)

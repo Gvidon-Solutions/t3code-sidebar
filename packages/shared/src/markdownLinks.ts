@@ -65,6 +65,94 @@ const POSIX_FILE_ROOT_PREFIXES = [
   "/workspaces/",
 ] as const;
 
+const BARE_FILE_EXTENSIONS = new Set([
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "mts",
+  "cts",
+  "json",
+  "jsonc",
+  "md",
+  "mdx",
+  "markdown",
+  "txt",
+  "yaml",
+  "yml",
+  "toml",
+  "xml",
+  "csv",
+  "tsv",
+  "ini",
+  "cfg",
+  "conf",
+  "env",
+  "lock",
+  "py",
+  "rb",
+  "go",
+  "rs",
+  "java",
+  "kt",
+  "kts",
+  "c",
+  "h",
+  "cc",
+  "cpp",
+  "hpp",
+  "cs",
+  "php",
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "sql",
+  "html",
+  "htm",
+  "css",
+  "scss",
+  "sass",
+  "less",
+  "vue",
+  "svelte",
+  "astro",
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "svg",
+  "webp",
+  "ico",
+  "mp3",
+  "mp4",
+  "webm",
+  "mov",
+  "zip",
+  "tar",
+  "gz",
+  "tgz",
+  "7z",
+  "rar",
+  "wasm",
+]);
+
+const BARE_FILE_DOC_EXTENSIONS = new Set(["md", "mdx", "markdown", "txt"]);
+
+const isLinkableBareFileName = (basename: string): boolean => {
+  if (EXTENSIONLESS_FILE_NAMES.has(basename)) return true;
+  if (BARE_FILE_EXTENSIONS.has(basename)) return true;
+  const dot = basename.lastIndexOf(".");
+  if (dot <= 0 || dot === basename.length - 1) return false;
+  const extension = basename.slice(dot + 1).toLowerCase();
+  if (!BARE_FILE_EXTENSIONS.has(extension)) return false;
+  // `Node.js`, `README.md` and `package.json` differ only by their stem case.
+  return !/^[A-Z]/.test(basename) || BARE_FILE_DOC_EXTENSIONS.has(extension);
+};
+
 const EXTENSIONLESS_FILE_NAMES = new Set([
   "Makefile",
   "makefile",
@@ -181,7 +269,7 @@ export function inlineCodeFilePathCandidate(codeText: string): string | null {
     const bare = candidate.replace(/[/\\]+$/, "");
     const basename = bare.split(/[\\/]/).at(-1) ?? bare;
     // Bare names are linkable when they name a file, not a version, host or prose word.
-    if (!FILE_EXTENSION_PATTERN.test(basename) && !EXTENSIONLESS_FILE_NAMES.has(basename)) {
+    if (!isLinkableBareFileName(basename)) {
       return null;
     }
   }

@@ -125,7 +125,34 @@ export async function reopenClosedView(
       break;
     case "file":
       if (surface.attachment) panels.openAttachment(ref, surface.attachment);
-      else panels.openFile(ref, surface.relativePath, surface.revealLine ?? undefined);
+      else
+        panels.openFile(
+          ref,
+          surface.relativePath,
+          surface.revealLine ?? undefined,
+          surface.environmentId === undefined
+            ? undefined
+            : {
+                environmentId: surface.environmentId,
+                workspaceRoot: surface.workspaceRoot ?? surface.root ?? "/",
+                projectName: surface.projectName ?? "",
+                ...(surface.notSynced ? { notSynced: true } : {}),
+                ...(surface.rawPath === undefined ? {} : { rawPath: surface.rawPath }),
+                ...(surface.machineLabel === undefined
+                  ? {}
+                  : { machineLabel: surface.machineLabel }),
+              },
+          {
+            ...(surface.notSynced ? { notSynced: true } : {}),
+            ...(surface.rawPath === undefined ? {} : { rawPath: surface.rawPath }),
+            ...(surface.inProject === undefined ? {} : { inProject: surface.inProject }),
+            ...(surface.resolvedDisplayPath === undefined
+              ? {}
+              : { resolvedDisplayPath: surface.resolvedDisplayPath }),
+            ...(surface.root === undefined ? {} : { root: surface.root }),
+            ...(surface.worktreeRemoved ? { worktreeRemoved: true } : {}),
+          },
+        );
       break;
     case "device":
       if (surface.target) {

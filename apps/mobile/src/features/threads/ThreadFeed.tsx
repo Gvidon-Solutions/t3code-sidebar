@@ -265,12 +265,9 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { ThreadWorkflowOpening, useWorkflowOpening } from "./thread-workflow-opening";
 import { useV2ItemSupport } from "../../state/v2-item-support";
 import { showFileLocateSheet } from "../files/locateFileSheetState";
+import { resolvedFileTabParams } from "../../lib/threadFileTab";
 import { filesEnvironment } from "../../state/files";
-import {
-  fileRoutePathSegments,
-  resolveFileLinkPath,
-  resolveWorkspaceRelativeFilePath,
-} from "../files/filePath";
+import { fileRoutePathSegments, resolveFileLinkPath } from "../files/filePath";
 import { useForkThread } from "../workspaces/useForkThread";
 import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
 import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fileChipMenu";
@@ -2910,38 +2907,23 @@ export const ThreadFeed = memo(function ThreadFeed({
       }) => {
         if (request.signal.aborted) return;
         void Haptics.selectionAsync();
-        const sameMachine = String(target.environmentId) === String(props.environmentId);
-        const outside = target.inProject === false;
-        const cwd =
-          target.root ?? props.workspaceRoot ?? (sameMachine ? props.workspaceRoot : null) ?? "";
-        const displayPath =
-          target.displayPath ??
-          (cwd === "" ? null : resolveWorkspaceRelativeFilePath(cwd, target.absolutePath)) ??
-          target.absolutePath;
-        const relativeTabPath =
-          cwd === "" ? null : resolveWorkspaceRelativeFilePath(cwd, target.absolutePath);
-        const tabPath =
-          sameMachine && !outside && target.worktreeRemoved !== true && relativeTabPath !== null
-            ? relativeTabPath
-            : target.absolutePath;
-        navigation.navigate("ThreadFile", {
-          // The thread's machine keeps this route under the thread, so it joins the pager tab.
-          environmentId: String(props.environmentId),
-          threadId: String(props.threadId),
-          fileTarget: "resolved",
-          fileEnvironmentId: String(target.environmentId),
-          path: tabPath,
-          resolvedPath: target.absolutePath,
-          ...(cwd === "" ? {} : { cwd }),
-          sourceEnvironmentId: String(props.environmentId),
-          ...(target.projectTitle === undefined ? {} : { projectName: target.projectTitle }),
-          ...(target.rawPath === undefined ? {} : { rawPath: target.rawPath }),
-          ...(displayPath === null ? {} : { displayPath }),
-          ...(target.line === undefined ? {} : { line: String(target.line) }),
-          ...(target.worktreeRemoved ? { worktreeRemoved: "1" } : {}),
-          ...(target.notSynced ? { notSynced: "1" } : {}),
-          ...(outside ? { outsideProject: "1" } : {}),
-        });
+        if (request.signal.aborted) return;
+        void Haptics.selectionAsync();
+        navigation.navigate(
+          "ThreadFile",
+          resolvedFileTabParams(String(props.environmentId), String(props.threadId), {
+            environmentId: String(target.environmentId),
+            absolutePath: target.absolutePath,
+            ...(target.line === undefined ? {} : { line: target.line }),
+            ...(target.root === undefined ? {} : { root: target.root }),
+            ...(target.rawPath === undefined ? {} : { rawPath: target.rawPath }),
+            ...(target.displayPath === undefined ? {} : { displayPath: target.displayPath }),
+            ...(target.projectTitle === undefined ? {} : { projectTitle: target.projectTitle }),
+            ...(target.inProject === undefined ? {} : { inProject: target.inProject }),
+            ...(target.notSynced ? { notSynced: true } : {}),
+            ...(target.worktreeRemoved ? { worktreeRemoved: true } : {}),
+          }),
+        );
       };
       void executeAtomQuery(
         appAtomRegistry,

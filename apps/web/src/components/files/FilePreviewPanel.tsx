@@ -1421,6 +1421,7 @@ export default function FilePreviewPanel({
         </div>
       ) : null}
       {rawPath !== undefined &&
+      !isHostPath(rawPath) &&
       relativePath !== null &&
       rawPath !==
         (resolvedDisplayPath === undefined

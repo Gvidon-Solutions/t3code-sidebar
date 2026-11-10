@@ -75,3 +75,54 @@ export function threadFileTab(params: ThreadFileRouteParams): ThreadFileTabMappi
     },
   };
 }
+
+/** The target a resolver, picker or `ui_open` hands to the pager tab. */
+export interface ResolvedFileTarget {
+  readonly environmentId: string;
+  readonly absolutePath: string;
+  readonly line?: number;
+  readonly root?: string;
+  readonly rawPath?: string;
+  readonly displayPath?: string;
+  readonly projectTitle?: string;
+  readonly inProject?: boolean;
+  readonly notSynced?: boolean;
+  readonly worktreeRemoved?: boolean;
+  readonly outsideProject?: boolean;
+}
+
+/**
+ * The route params that open `target` as a tab of `threadEnvironmentId`.
+ * A project-relative display path is the tab key for the thread's own in-project
+ * file; every other outcome keeps its absolute path so the tab is unambiguous.
+ */
+export function resolvedFileTabParams(
+  threadEnvironmentId: string,
+  threadId: string,
+  target: ResolvedFileTarget,
+) {
+  const display = target.displayPath;
+  const useDisplayKey =
+    target.environmentId === threadEnvironmentId &&
+    target.inProject !== false &&
+    target.worktreeRemoved !== true &&
+    display !== undefined &&
+    !display.startsWith("/");
+  return {
+    environmentId: threadEnvironmentId,
+    threadId,
+    fileTarget: "resolved",
+    fileEnvironmentId: target.environmentId,
+    path: useDisplayKey ? display : target.absolutePath,
+    resolvedPath: target.absolutePath,
+    ...(target.root === undefined ? {} : { cwd: target.root }),
+    sourceEnvironmentId: threadEnvironmentId,
+    ...(target.projectTitle === undefined ? {} : { projectName: target.projectTitle }),
+    ...(target.rawPath === undefined ? {} : { rawPath: target.rawPath }),
+    ...(display === undefined ? {} : { displayPath: display }),
+    ...(target.line === undefined ? {} : { line: String(target.line) }),
+    ...(target.worktreeRemoved ? { worktreeRemoved: "1" } : {}),
+    ...(target.notSynced ? { notSynced: "1" } : {}),
+    ...(target.outsideProject || target.inProject === false ? { outsideProject: "1" } : {}),
+  };
+}

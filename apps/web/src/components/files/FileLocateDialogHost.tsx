@@ -154,6 +154,13 @@ export function FileLocateDialogHost() {
                       absolutePath: candidate.absolutePath,
                       ...(candidate.line === undefined ? {} : { line: candidate.line }),
                       ...(candidate.root === undefined ? {} : { root: candidate.root }),
+                      rawPath: request.rawPath,
+                      displayPath: candidate.displayPath,
+                      ...(result.projectTitle === undefined
+                        ? {}
+                        : { projectTitle: result.projectTitle }),
+                      inProject: candidate.inProject,
+                      ...(candidate.notSynced ? { notSynced: true } : {}),
                     });
                     close();
                   }}
@@ -200,6 +207,12 @@ export function showFileLocateDialog(
     absolutePath: string;
     line?: number;
     root?: string;
+    rawPath?: string;
+    displayPath?: string;
+    projectTitle?: string;
+    inProject?: boolean;
+    notSynced?: boolean;
+    worktreeRemoved?: boolean;
   }) => void,
   search: (term: string) => void,
 ) {

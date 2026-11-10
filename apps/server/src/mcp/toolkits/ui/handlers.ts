@@ -11,6 +11,7 @@ import * as UiRequests from "../../../uiRequests/UiRequests.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { unavailable } from "../../threadAccess.ts";
+import { uiFileTarget } from "./fileTarget.ts";
 import { UiToolkit } from "./tools.ts";
 
 /** The calling thread, which must hold a live voice conversation. */
@@ -89,16 +90,8 @@ export const layer = McpToolAccess.toLayer(UiToolkit, {
             threadId: thread.threadId,
           }),
         );
-        if (locate.status === "notFound" || locate.target === undefined) {
-          return { clients: 0, locate };
-        }
-        resolved = {
-          kind: "file",
-          path: locate.target.absolutePath,
-          environmentId: locate.target.environmentId,
-          ...(locate.target.line === undefined ? {} : { line: locate.target.line }),
-        };
-        const clients = yield* uiRequests.open({ threadId: thread.threadId, target: resolved });
+        const target = uiFileTarget(locate, resolved.path, descriptor.environmentId);
+        const clients = yield* uiRequests.open({ threadId: thread.threadId, target });
         return { clients, locate };
       }
       const clients = yield* uiRequests.open({ threadId: thread.threadId, target: resolved });

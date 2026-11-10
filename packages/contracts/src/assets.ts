@@ -190,6 +190,17 @@ export class AssetWorkspaceRootNormalizationError extends Schema.TaggedError<Ass
   }
 }
 
+export class AssetPeerFileAccessError extends Schema.TaggedError<AssetPeerFileAccessError>()(
+  "AssetPeerFileAccessError",
+  {
+    resource: AssetResource,
+  },
+) {
+  override get message(): string {
+    return "This file is not available through that link.";
+  }
+}
+
 export class AssetWorkspacePathValidationError extends Schema.TaggedError<AssetWorkspacePathValidationError>()(
   "AssetWorkspacePathValidationError",
   {
@@ -331,6 +342,7 @@ export const AssetAccessError = Schema.Union([
   AssetWorkspaceContextResolutionError,
   AssetWorkspaceRootNormalizationError,
   AssetWorkspacePathValidationError,
+  AssetPeerFileAccessError,
   AssetPreviewTypeValidationError,
   AssetWorkspaceAssetInspectionError,
   AssetWorkspaceAssetNotFoundError,

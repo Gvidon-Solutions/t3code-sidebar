@@ -384,21 +384,45 @@ const make = Effect.gen(function* () {
         }
       }
 
-      const rootOf = (absolutePath: string) => {
-        for (const rep of Object.values(snapshot.config.projectMounts).flat()) {
-          if (isWithinRoot(path, absolutePath, rep.path)) return rep.path;
-        }
-        return context.projectRoot;
+      const rootOf = (absolutePath: string, environmentId: EnvironmentId) => {
+        const roots = [
+          ...(environmentId === self
+            ? [effectiveCwd, context.worktreePath ?? undefined, context.projectRoot]
+            : []),
+          ...Object.values(snapshot.config.projectMounts)
+            .flat()
+            .filter((rep) => rep.environmentId === environmentId)
+            .map((rep) => rep.path),
+        ].filter((value): value is string => value !== undefined);
+        return roots
+          .filter((root) => isWithinRoot(path, absolutePath, root))
+          .sort((left, right) => right.length - left.length)[0];
       };
 
-      const inProject = (absolutePath: string) =>
-        (context.projectRoot !== undefined &&
-          isWithinRoot(path, absolutePath, context.projectRoot)) ||
-        (context.cwd !== undefined && isWithinRoot(path, absolutePath, context.cwd)) ||
-        representationRoots.some((rep) => isWithinRoot(path, absolutePath, rep.path));
+      const inProject = (absolutePath: string, environmentId: EnvironmentId) => {
+        if (environmentId === self) {
+          if (
+            context.projectRoot !== undefined &&
+            isWithinRoot(path, absolutePath, context.projectRoot)
+          )
+            return true;
+          if (context.cwd !== undefined && isWithinRoot(path, absolutePath, context.cwd))
+            return true;
+          if (
+            context.worktreePath !== null &&
+            context.worktreePath !== undefined &&
+            isWithinRoot(path, absolutePath, context.worktreePath)
+          )
+            return true;
+        }
+        return Object.values(snapshot.config.projectMounts)
+          .flat()
+          .filter((rep) => rep.environmentId === environmentId)
+          .some((rep) => isWithinRoot(path, absolutePath, rep.path));
+      };
 
-      const displayPathOf = (absolutePath: string) => {
-        const root = rootOf(absolutePath);
+      const displayPathOf = (absolutePath: string, environmentId: EnvironmentId) => {
+        const root = rootOf(absolutePath, environmentId);
         if (root === undefined) return absolutePath;
         const relative = isWithinRoot(path, absolutePath, root)
           ? path.relative(root, absolutePath)
@@ -418,13 +442,15 @@ const make = Effect.gen(function* () {
         via,
         ...(line === undefined ? {} : { line }),
         ...(column === undefined ? {} : { column }),
-        inProject: inProject(stat.absolutePath),
+        inProject: inProject(stat.absolutePath, environmentId),
         ...(notSynced ? { notSynced: true } : {}),
         ...(stat.byteLength === undefined ? {} : { byteLength: stat.byteLength }),
         ...(stat.mtimeMs === undefined ? {} : { mtimeMs: stat.mtimeMs }),
         touchedByThread: touched.has(path.resolve(stat.absolutePath)),
-        displayPath: displayPathOf(stat.absolutePath),
-        ...(rootOf(stat.absolutePath) === undefined ? {} : { root: rootOf(stat.absolutePath) }),
+        displayPath: displayPathOf(stat.absolutePath, environmentId),
+        ...(rootOf(stat.absolutePath, environmentId) === undefined
+          ? {}
+          : { root: rootOf(stat.absolutePath, environmentId) }),
       });
 
       const rankWithin = (
@@ -522,12 +548,17 @@ const make = Effect.gen(function* () {
               ? candidate === normalisedQuery || candidate.endsWith(suffix)
               : path.basename(candidate) === normalisedQuery,
           )
+          .map((entry) => ({ entry, absolutePath: path.join(realRoot.absolutePath, entry) }))
+          .sort(
+            (left, right) =>
+              Number(touched.has(path.resolve(right.absolutePath))) -
+                Number(touched.has(path.resolve(left.absolutePath))) ||
+              left.entry.length - right.entry.length,
+          )
           .slice(0, FILES_LOCATE_MAX_CANDIDATES);
-        const stats = yield* Effect.forEach(
-          matches,
-          (entry) => statLocal(path.join(realRoot.absolutePath, entry)),
-          { concurrency: 8 },
-        );
+        const stats = yield* Effect.forEach(matches, (match) => statLocal(match.absolutePath), {
+          concurrency: 8,
+        });
         return stats.flatMap((stat) =>
           stat === null || stat.kind !== "file"
             ? []
@@ -536,6 +567,32 @@ const make = Effect.gen(function* () {
       });
 
       const notFound = (): FilesLocateResult => ({ status: "notFound", tried, ...baseResult });
+
+      const fromRepresentations = Effect.fn("FileLocator.fromRepresentations")(function* (
+        query: string,
+      ) {
+        if (threadRep === null) return null;
+        trial("representation-map", undefined, threadRep.logical);
+        const remainder = query.replace(/^\.\//, "");
+        const notSyncedForPrimary = threadRep.reps.some(
+          (rep) => rep.environmentId === self && rep.role === "replica",
+        );
+        const hits = yield* statMapped(
+          threadRep.reps,
+          remainder,
+          "representation-map",
+          notSyncedForPrimary,
+        );
+        if (hits.length === 0) return null;
+        const sorted = sortByMachine(hits, self, threadRep.reps);
+        const best = sorted[0]!;
+        const sameRank = sorted.filter(
+          (hit) =>
+            machineRank(hit.environmentId, self, threadRep.reps) ===
+            machineRank(best.environmentId, self, threadRep.reps),
+        );
+        return sameRank.length === 1 ? found(best) : resultFor(sameRank);
+      });
 
       if (explicit !== undefined) {
         trial("explicit-machine", explicit);
@@ -553,6 +610,23 @@ const make = Effect.gen(function* () {
         trial("exact", self);
         const exact = yield* statLocal(absolute);
         if (exact !== null) return found(candidateOf(exact, self, "exact"));
+
+        if (
+          worktreeRemoved &&
+          context.worktreePath !== undefined &&
+          context.worktreePath !== null &&
+          context.projectRoot !== undefined &&
+          isWithinRoot(path, absolute, context.worktreePath)
+        ) {
+          const remainder = path.relative(context.worktreePath, absolute);
+          trial("representation-map", self, "worktree-removed");
+          const projectStat = yield* statLocal(path.resolve(context.projectRoot, remainder));
+          if (projectStat !== null) {
+            return found(candidateOf(projectStat, self, "representation-map"));
+          }
+          const remapped = yield* fromRepresentations(remainder);
+          if (remapped !== null) return remapped;
+        }
 
         const mapped = logicalContaining(snapshot.config.projectMounts, absolute);
         if (mapped !== null) {
@@ -645,36 +719,16 @@ const make = Effect.gen(function* () {
           const hits = yield* suffixCandidates(searchRoot, relativePath, "suffix");
           if (hits.length > 0) return resultFor(hits);
         }
-        trial("basename", self);
-        const basenameHits = yield* suffixCandidates(
-          searchRoot,
-          path.basename(relativePath.replace(/[\\/]+$/, "")),
-          "basename",
-        );
-        if (basenameHits.length > 0) return resultFor(basenameHits);
-      }
-
-      if (threadRep !== null) {
-        trial("representation-map", undefined, threadRep.logical);
-        const remainder = relativePath.replace(/^\.\//, "");
-        const notSyncedForPrimary = threadRep.reps.some(
-          (rep) => rep.environmentId === self && rep.role === "replica",
-        );
-        const hits = yield* statMapped(
-          threadRep.reps,
-          remainder,
-          "representation-map",
-          notSyncedForPrimary,
-        );
-        if (hits.length > 0) {
-          const sorted = sortByMachine(hits, self, threadRep.reps);
-          const best = sorted[0]!;
-          const sameRank = sorted.filter(
-            (hit) =>
-              machineRank(hit.environmentId, self, threadRep.reps) ===
-              machineRank(best.environmentId, self, threadRep.reps),
+        const remapped = yield* fromRepresentations(relativePath);
+        if (remapped !== null) return remapped;
+        if (!relativePath.includes("/") && !relativePath.includes("\\")) {
+          trial("basename", self);
+          const basenameHits = yield* suffixCandidates(
+            searchRoot,
+            path.basename(relativePath.replace(/[\\/]+$/, "")),
+            "basename",
           );
-          return sameRank.length === 1 ? found(best) : resultFor(sameRank);
+          if (basenameHits.length > 0) return resultFor(basenameHits);
         }
       }
 

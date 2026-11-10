@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { threadFileTab } from "./threadFileTab";
+import { resolvedFileTabParams, threadFileTab } from "./threadFileTab";
 
 const resolved = {
   environmentId: "cloudbox",
@@ -77,5 +77,68 @@ describe("threadFileTab", () => {
         path: "apps/web/src/lib/x.ts",
       }),
     ).toEqual({ path: "apps/web/src/lib/x.ts", line: null });
+  });
+});
+
+describe("resolvedFileTabParams", () => {
+  it("H3 · opens a same-machine in-project file by its display path", () => {
+    expect(
+      resolvedFileTabParams("studio", "thread", {
+        environmentId: "studio",
+        absolutePath: "/srv/proj/apps/web/src/x.ts",
+        displayPath: "apps/web/src/x.ts",
+        root: "/srv/proj",
+        rawPath: "src/x.ts",
+        projectTitle: "Proj",
+        inProject: true,
+        line: 7,
+      }),
+    ).toEqual({
+      environmentId: "studio",
+      threadId: "thread",
+      fileTarget: "resolved",
+      fileEnvironmentId: "studio",
+      path: "apps/web/src/x.ts",
+      resolvedPath: "/srv/proj/apps/web/src/x.ts",
+      cwd: "/srv/proj",
+      sourceEnvironmentId: "studio",
+      projectName: "Proj",
+      rawPath: "src/x.ts",
+      displayPath: "apps/web/src/x.ts",
+      line: "7",
+    });
+  });
+
+  it("H3 · keeps an absolute tab key for another machine or a removed worktree", () => {
+    expect(
+      resolvedFileTabParams("studio", "thread", {
+        environmentId: "cloudbox",
+        absolutePath: "/srv/cloudbox/src/x.ts",
+        displayPath: "src/x.ts",
+        root: "/srv/cloudbox",
+        inProject: true,
+      }).path,
+    ).toBe("/srv/cloudbox/src/x.ts");
+    expect(
+      resolvedFileTabParams("studio", "thread", {
+        environmentId: "studio",
+        absolutePath: "/srv/proj/src/x.ts",
+        displayPath: "src/x.ts",
+        root: "/srv/proj",
+        inProject: true,
+        worktreeRemoved: true,
+      }),
+    ).toMatchObject({ path: "/srv/proj/src/x.ts", worktreeRemoved: "1" });
+  });
+
+  it("H3 · carries the not-synced note", () => {
+    expect(
+      resolvedFileTabParams("studio", "thread", {
+        environmentId: "cloudbox",
+        absolutePath: "/srv/x.ts",
+        inProject: true,
+        notSynced: true,
+      }),
+    ).toMatchObject({ notSynced: "1", fileEnvironmentId: "cloudbox" });
   });
 });
