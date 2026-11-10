@@ -547,6 +547,39 @@ export function offlineMeshEnvironmentIds(
     .map((machine) => machine.environmentId);
 }
 
+/** What the UI needs to know about one machine's reachability. */
+export interface MeshMachineReachability {
+  readonly connectedHere?: boolean;
+  readonly network?: { readonly state: string } | null | undefined;
+  readonly linkedWith?: readonly unknown[] | undefined;
+  readonly lastExchangeAt?: string | null | undefined;
+}
+
+/**
+ * A machine this client can use: its own connections, a direct or relayed peer, or a
+ * machine the mesh holds a live link to. An offline machine is never reachable.
+ */
+export function meshMachineReachable(machine: MeshMachineReachability): boolean {
+  if (machine.network?.state === "offline") return false;
+  return (
+    machine.connectedHere === true ||
+    machine.network?.state === "direct" ||
+    machine.network?.state === "relayed" ||
+    (machine.linkedWith?.length ?? 0) > 0 ||
+    machine.lastExchangeAt != null
+  );
+}
+
+/**
+ * Machines this client can use through the mesh: its own connections plus peers the
+ * mesh reaches directly or through one relay. A reachable machine is not "not connected".
+ */
+export function reachableMeshEnvironmentIds(
+  machines: ReadonlyArray<{ readonly environmentId: string } & MeshMachineReachability>,
+): string[] {
+  return machines.filter(meshMachineReachable).map((machine) => machine.environmentId);
+}
+
 /** One machine's configured name and offline age, e.g. "laptop is offline · 3 min". */
 export function meshMachineOfflineText(
   machine: Pick<MeshMachine, "label" | "lastSeenAt" | "lastExchangeAt">,

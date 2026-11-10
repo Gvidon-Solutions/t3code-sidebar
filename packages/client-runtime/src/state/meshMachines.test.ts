@@ -25,6 +25,7 @@ import {
   offlineConversationEmptyText,
   offlineComposerPlaceholder,
   offlineMeshEnvironmentIds,
+  reachableMeshEnvironmentIds,
   meshMachineOfflineText,
   meshLinkedWithText,
   offlineMachinePrompt,
@@ -839,6 +840,14 @@ describe("offline conversation", () => {
       },
     ];
     expect(offlineMeshEnvironmentIds(machines)).toEqual(["laptop"]);
+    expect(reachableMeshEnvironmentIds(machines)).toEqual(["studio"]);
+    expect(
+      reachableMeshEnvironmentIds([
+        ...machines,
+        { environmentId: "laptop", network: { state: "relayed" } },
+        { environmentId: "cloudbox", connectedHere: true },
+      ]),
+    ).toEqual(["studio", "laptop", "cloudbox"]);
     expect(meshMachineOfflineText(machines[0]!, now)).toBe("laptop is offline · 3 min");
   });
 

@@ -309,6 +309,8 @@ export function buildWorkspaceHomeItems(input: {
   readonly connectedEnvironmentIds: ReadonlyArray<string>;
   /** Machines the mesh reports offline, so their strip tag dims before this phone notices. */
   readonly offlineEnvironmentIds?: ReadonlyArray<string>;
+  /** Machines the mesh reaches for this phone, even without a saved connection. */
+  readonly reachableEnvironmentIds?: ReadonlyArray<string>;
   /** How the sidebar names a machine on one environment. */
   readonly resolveMachineDisplay: (environmentId: EnvironmentId) => MachineDisplay;
   /** Offline machines as the mesh reports them, with their last-seen time. */
@@ -547,6 +549,9 @@ export function buildWorkspaceHomeItems(input: {
           ...(input.offlineEnvironmentIds === undefined
             ? {}
             : { offlineEnvironmentIds: input.offlineEnvironmentIds }),
+          ...(input.reachableEnvironmentIds === undefined
+            ? {}
+            : { reachableEnvironmentIds: input.reachableEnvironmentIds }),
           isScratch: model.input.isScratch,
         },
         input.liveStatuses ?? [],

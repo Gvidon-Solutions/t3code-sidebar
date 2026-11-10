@@ -5,6 +5,7 @@ import {
   logDraftMachineCollisions,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
+import { meshMachineReachable } from "@t3tools/client-runtime/state/mesh-machines";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { EnvironmentId, type ProjectId, resolveEnvironmentMachineKind } from "@t3tools/contracts";
@@ -57,14 +58,15 @@ export function useLogicalProjectEnvironments(
     const connected = environment?.connection.phase === "connected";
     const meshMachine = meshMachines.find((machine) => machine.environmentId === environmentId);
     const reachable =
-      connected === true ||
-      meshMachine?.network?.state === "direct" ||
-      meshMachine?.network?.state === "relayed";
-    const via =
+      connected === true || (meshMachine ? meshMachineReachable(meshMachine) : false);
+    const source =
       meshMachine?.network?.state === "relayed"
-        ? (meshMachines.find((machine) => machine.environmentId === meshMachine.network?.via)
-            ?.label ?? null)
-        : null;
+        ? meshMachine.network.via
+        : meshMachine?.network?.sourceEnvironmentId;
+    const via =
+      source === undefined
+        ? (meshMachine?.linkedWith[0]?.label ?? null)
+        : (meshMachines.find((machine) => machine.environmentId === source)?.label ?? null);
     envs.push({
       environmentId,
       projectId,

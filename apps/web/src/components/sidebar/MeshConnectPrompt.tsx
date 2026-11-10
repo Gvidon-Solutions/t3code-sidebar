@@ -9,6 +9,7 @@ import { usePrimarySettings } from "../../hooks/useSettings";
 import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironments } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { isServerUiWindow } from "../../lib/serverUiReconnect";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import {
@@ -57,6 +58,9 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
   const [isConnecting, setIsConnecting] = useState(false);
   const connectingRef = useRef(false);
   const [dismissed, setDismissed] = useState<readonly string[]>(readDismissedFromStorage);
+  // The reduced server UI has no saved connections and cannot switch them on; the
+  // built-in client is where "Connect all" works.
+  if (isServerUiWindow()) return null;
   if (!enabled) return null;
   const connected = new Set(
     environments

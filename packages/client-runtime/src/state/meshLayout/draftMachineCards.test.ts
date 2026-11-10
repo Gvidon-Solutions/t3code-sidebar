@@ -270,8 +270,83 @@ describe("draftMachineCards", () => {
     expect(rows[0]?.machine.tag).toBe("ST");
     expect(rows[0]?.note).toBeNull();
     expect(rows[1]?.note).toBeNull();
-    expect(rows[2]?.note).toBe("Not connected here");
-    expect(rows[2]?.hint).toContain("not connected to laptop");
+    expect(rows[2]?.note).toBe("Available through studio");
+    expect(rows[2]?.hint).toContain("The mesh reaches laptop through studio");
+  });
+});
+
+describe("mesh-reached machine cards", () => {
+  const config = {
+    machines: {
+      studio: { title: "studio", tag: "ST" },
+      cloudbox: { title: "cloudbox", tag: "CB" },
+    },
+  } as const;
+
+  it("names a reachable machine instead of calling it not connected here", () => {
+    const rows = draftMachineCards({
+      config,
+      choices: [
+        {
+          environmentId: "studio",
+          label: "studio",
+          projectId: "p1",
+          primary: true,
+          connected: true,
+          hasUsableModels: true,
+        },
+        {
+          environmentId: "cloudbox",
+          label: "cloudbox",
+          projectId: "p1",
+          primary: false,
+          connected: false,
+          hasUsableModels: true,
+          sync: "synced",
+        },
+      ],
+      reachability: {
+        cloudbox: { reachable: true, viaLabel: "studio" },
+      },
+      selectedEnvironmentId: "studio",
+    });
+    const cloudbox = rows.find((row) => row.environmentId === "cloudbox");
+    expect(cloudbox?.text).toBe("Synced");
+    expect(cloudbox?.selectable).toBe(false);
+    expect(cloudbox?.note).toBe("Available through studio");
+    expect(cloudbox?.note).not.toBe("Not connected here");
+    expect(cloudbox?.hint).toBe(
+      "The mesh reaches cloudbox through studio. Connect this device to start a thread here.",
+    );
+  });
+
+  it("still names an unreachable machine as not connected here", () => {
+    const rows = draftMachineCards({
+      config,
+      choices: [
+        {
+          environmentId: "studio",
+          label: "studio",
+          projectId: "p1",
+          primary: true,
+          connected: true,
+          hasUsableModels: true,
+        },
+        {
+          environmentId: "cloudbox",
+          label: "cloudbox",
+          projectId: "p1",
+          primary: false,
+          connected: false,
+          hasUsableModels: true,
+        },
+      ],
+      reachability: {},
+      selectedEnvironmentId: "studio",
+    });
+    const cloudbox = rows.find((row) => row.environmentId === "cloudbox");
+    expect(cloudbox?.text).toBe("Not connected here");
+    expect(cloudbox?.note).toBeNull();
   });
 });
 

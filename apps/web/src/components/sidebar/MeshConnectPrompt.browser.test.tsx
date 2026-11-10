@@ -2,7 +2,7 @@ import { Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
-import { act, render } from "../../../test/render";
+import { act, render, stubGlobal } from "../../../test/render";
 import { MeshConnectPrompt, MESH_CONNECT_PROMPT_DISMISSED_KEY } from "./MeshConnectPrompt";
 
 const mocks = vi.hoisted(() => ({
@@ -97,6 +97,22 @@ it("merges a dismissal made meanwhile instead of overwriting it", async () => {
   window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, JSON.stringify(["studio"]));
   await userEvent.click(screen.getByRole("button", { name: "Not now" }));
   expect(readDismissed()).toEqual(["cloudbox", "studio"]);
+});
+
+it("does not appear in the reduced server UI, which cannot connect saved machines", async () => {
+  run.mockImplementation(success);
+  mocks.machines = [
+    { environmentId: "studio", label: "studio" },
+    { environmentId: "cloudbox", label: "cloudbox" },
+  ];
+  window.localStorage.removeItem(MESH_CONNECT_PROMPT_DISMISSED_KEY);
+  using _shell = stubGlobal("desktopShell", {
+    origin: "https://studio.example/",
+    returnToBundled: () => {},
+  });
+  await using screen = await render(<MeshConnectPrompt config={null} />);
+  expect(screen.container.querySelector("[data-mesh-connect-prompt]")).toBeNull();
+  expect(screen.container.textContent).not.toContain("Connect to all machines in your mesh");
 });
 
 it("does not dismiss a machine this device never added", async () => {

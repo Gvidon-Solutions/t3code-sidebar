@@ -22,7 +22,10 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
-import { offlineMachineText } from "@t3tools/client-runtime/state/mesh-machines";
+import {
+  meshMachineReachable,
+  offlineMachineText,
+} from "@t3tools/client-runtime/state/mesh-machines";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useEnvironmentProviders } from "../../state/environments";
@@ -133,18 +136,19 @@ export function DraftMachineCards(props: {
     : fallbackLogicalKey();
   const reachability = Object.fromEntries(
     machines.map((machine) => {
-      const via =
+      const source =
         machine.network?.state === "relayed"
-          ? (machines.find((other) => other.environmentId === machine.network?.via)?.label ?? null)
-          : null;
+          ? machine.network.via
+          : machine.network?.sourceEnvironmentId;
+      const via =
+        source === undefined
+          ? (machine.linkedWith[0]?.label ?? null)
+          : (machines.find((other) => other.environmentId === source)?.label ?? null);
       const offline = machine.network?.state === "offline";
       return [
         machine.environmentId,
         {
-          reachable:
-            machine.connectedHere ||
-            machine.network?.state === "direct" ||
-            machine.network?.state === "relayed",
+          reachable: meshMachineReachable(machine),
           viaLabel: via,
           offline,
           offlineText: offline

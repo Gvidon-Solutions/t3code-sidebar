@@ -192,6 +192,7 @@ export function draftMachineCards(input: {
         sync: choice.sync ?? null,
       });
       const via = reach?.viaLabel?.trim();
+      const reachableThroughMesh = !choice.connected && (reach?.reachable ?? false);
       const note =
         state.status === "cannot-host"
           ? null
@@ -201,7 +202,9 @@ export function draftMachineCards(input: {
                 state.status === "unreachable" ||
                 state.status === "offline"
               ? null
-              : draftMachineCardTexts.notConnected;
+              : reachableThroughMesh
+                ? `Available through ${via ?? "the mesh"}`
+                : draftMachineCardTexts.notConnected;
       const hint =
         state.status === "cannot-host"
           ? `This server can't host a copy of the project. Update it to a version that supports the mesh.`
@@ -213,9 +216,11 @@ export function draftMachineCards(input: {
                 ? `${choice.label} has no usable models for this project. Add or enable a provider there.`
                 : state.guidance !== null
                   ? `The selected model isn't available on ${choice.label}. Pick another machine or choose a model that exists there.`
-                  : note !== null
-                    ? `This device is not connected to ${choice.label}${via ? `; the mesh reaches it through ${via}` : ""}. Connect this device to start a thread here.`
-                    : null;
+                  : reachableThroughMesh
+                    ? `The mesh reaches ${choice.label}${via ? ` through ${via}` : ""}. Connect this device to start a thread here.`
+                    : note !== null
+                      ? `This device is not connected to ${choice.label}. Connect this device to start a thread here.`
+                      : null;
       return {
         ...state,
         environmentId: choice.environmentId,
