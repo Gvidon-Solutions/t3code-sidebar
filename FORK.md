@@ -22,8 +22,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.7` (`322f6544df`, tagged 2026-11-03) on
-  2026-11-06 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.8` (`bf469bb196`, tagged 2026-11-09) on
+  2026-11-11 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
