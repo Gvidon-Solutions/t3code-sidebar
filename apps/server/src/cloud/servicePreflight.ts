@@ -1,5 +1,10 @@
 import packageJson from "../../package.json" with { type: "json" };
-import { BUILD_MIGRATION_HEAD, recordedMigrations } from "../persistence/databaseMigrationHead.ts";
+import {
+  BUILD_FORK_MIGRATION_HEAD,
+  BUILD_MIGRATION_HEAD,
+  isLegacyForkMigration,
+  recordedMigrations,
+} from "../persistence/databaseMigrationHead.ts";
 import { SERVICE_LAUNCHER_PROTOCOL } from "./serviceProtocol.ts";
 
 export type ServicePreflightResult =
@@ -55,12 +60,18 @@ export function runServicePreflight(input: {
 }
 
 /** Migrations a newer build recorded, or null when the database exists but cannot be read.
- * Startup already handles renamed ids this build knows. */
+ * Legacy fork rows in the upstream ledger are renamed ids this build knows and startup moves;
+ * they are not newer. Each ledger has its own build head. */
 function newerRecordedMigrations(databasePath: string): ReadonlyArray<string> | null {
   const recorded = recordedMigrations(databasePath);
-  return recorded === null
-    ? null
-    : recorded.filter(({ id }) => id > BUILD_MIGRATION_HEAD).map(({ id, name }) => `${id}_${name}`);
+  if (recorded === null) return null;
+  return recorded
+    .filter(({ id, name, ledger }) => {
+      if (ledger === "upstream" && isLegacyForkMigration({ id, name })) return false;
+      const head = ledger === "fork" ? BUILD_FORK_MIGRATION_HEAD : BUILD_MIGRATION_HEAD;
+      return id > head;
+    })
+    .map(({ id, name }) => `${id}_${name}`);
 }
 
 export function decodeServicePreflightResult(value: unknown): ServicePreflightResult | undefined {

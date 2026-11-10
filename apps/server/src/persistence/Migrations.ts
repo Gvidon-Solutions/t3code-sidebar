@@ -188,20 +188,39 @@ const forkMigrationEntries = [
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
 export const forkMigrationManifest = forkMigrationEntries.map(([id, name]) => [id, name] as const);
+export const BUILD_MIGRATION_HEAD = Math.max(...migrationEntries.map(([id]) => id));
+export const BUILD_FORK_MIGRATION_HEAD = Math.max(...forkMigrationEntries.map(([id]) => id));
 
-// Migration ids a pre-split fork build recorded in the upstream ledger, mapped to the fork ids
-// they became. MeshLayout shipped under 77 and later 80; PeerConnections under 78 and 81;
-// PeerReceiptRetention under 82 and 83 before peer identity took 82.
-const LEGACY_FORK_MIGRATION_IDS = [
+// Legacy upstream-ledger ids a pre-split fork build wrote, mapped to their fork ids. A null id
+// means the old record must not mark fork work done: bc0a8f1f26 recorded PeerReceiptRetention at
+// 82 before PeerIdentityBindings at 1002 existed, so its row is dropped and 1002-1004 run.
+export const LEGACY_FORK_MIGRATION_IDS: ReadonlyArray<{
+  readonly legacyId: number;
+  readonly legacyName: string;
+  readonly id: number | null;
+}> = [
   { legacyId: 77, legacyName: "MeshLayout", id: 1000 },
   { legacyId: 78, legacyName: "PeerConnections", id: 1001 },
   { legacyId: 80, legacyName: "MeshLayout", id: 1000 },
   { legacyId: 81, legacyName: "PeerConnections", id: 1001 },
   { legacyId: 82, legacyName: "PeerIdentityBindings", id: 1002 },
-  { legacyId: 82, legacyName: "PeerReceiptRetention", id: 1003 },
+  { legacyId: 82, legacyName: "PeerReceiptRetention", id: null },
   { legacyId: 83, legacyName: "PeerReceiptRetention", id: 1003 },
   { legacyId: 84, legacyName: "CloseTerminalRunNodes", id: 1004 },
-] as const;
+];
+
+const LEGACY_FORK_RECORDS = new Set(
+  LEGACY_FORK_MIGRATION_IDS.map(({ legacyId, legacyName }) => `${legacyId}:${legacyName}`),
+);
+
+/** A row a pre-split fork build wrote into the upstream ledger, which startup moves into the fork
+ * ledger. It is an id this build knows under another ledger, not a newer migration. */
+export function isLegacyForkMigration(row: {
+  readonly id: number;
+  readonly name: string;
+}): boolean {
+  return LEGACY_FORK_RECORDS.has(`${row.id}:${row.name}`);
+}
 
 const makeMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(
@@ -249,26 +268,50 @@ const reconcileForkMigrationLedger = Effect.fn("reconcileForkMigrationLedger")(f
           WHERE migration_id = ${legacyId} AND name = ${legacyName}
         `;
         if (legacy.length === 0) continue;
-        const expectedName = forkNames.get(id);
-        if (expectedName === undefined) continue;
-        const existing = yield* sql<{ readonly name: string }>`
-          SELECT name FROM ${sql(FORK_MIGRATIONS_TABLE)} WHERE migration_id = ${id}
-        `;
-        if (existing.length === 0) {
-          yield* sql`
-            INSERT INTO ${sql(FORK_MIGRATIONS_TABLE)} (migration_id, name)
-            VALUES (${id}, ${expectedName})
+        if (id !== null) {
+          const expectedName = forkNames.get(id);
+          if (expectedName === undefined) continue;
+          const existing = yield* sql<{ readonly name: string }>`
+            SELECT name FROM ${sql(FORK_MIGRATIONS_TABLE)} WHERE migration_id = ${id}
           `;
-        } else if (existing[0]!.name !== expectedName) {
-          return yield* new Migrator.MigrationError({
-            kind: "BadState",
-            message: `The fork migrations ledger already records ${id} as ${existing[0]!.name}, not ${expectedName}. It was probably written by a different build.`,
-          });
+          if (existing.length === 0) {
+            yield* sql`
+              INSERT INTO ${sql(FORK_MIGRATIONS_TABLE)} (migration_id, name)
+              VALUES (${id}, ${expectedName})
+            `;
+          } else if (existing[0]!.name !== expectedName) {
+            return yield* new Migrator.MigrationError({
+              kind: "BadState",
+              message: `The fork migrations ledger already records ${id} as ${existing[0]!.name}, not ${expectedName}. It was probably written by a different build.`,
+            });
+          }
         }
         yield* sql`
           DELETE FROM effect_sql_migrations
           WHERE migration_id = ${legacyId} AND name = ${legacyName}
         `;
+        moved = true;
+      }
+      // A build that ran the old 82 PeerReceiptRetention mapping committed a fork ledger with
+      // 1002 missing. The migrator skips every id up to the highest recorded, so rewind the
+      // contiguous prefix and let the idempotent fork migrations fill the hole.
+      const forkRows = yield* sql<{ readonly migration_id: number; readonly name: string }>`
+        SELECT migration_id, name FROM ${sql(FORK_MIGRATIONS_TABLE)} ORDER BY migration_id
+      `;
+      const recordedForkIds = new Set(forkRows.map((row) => row.migration_id));
+      const highestForkId = Math.max(0, ...recordedForkIds);
+      const firstHole = forkMigrationEntries.find(
+        ([id]) => id < highestForkId && !recordedForkIds.has(id),
+      )?.[0];
+      if (firstHole !== undefined) {
+        const knownIds = new Set<number>(forkMigrationEntries.map(([id]) => id));
+        for (const row of forkRows) {
+          if (row.migration_id >= firstHole && knownIds.has(row.migration_id)) {
+            yield* sql`
+              DELETE FROM ${sql(FORK_MIGRATIONS_TABLE)} WHERE migration_id = ${row.migration_id}
+            `;
+          }
+        }
         moved = true;
       }
       if (moved) {
@@ -304,10 +347,24 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
     if (recordedName === name) return [];
     return [`${id}_${name} (recorded: ${recordedName ?? "nothing"})`];
   });
-  if (skipped.length === 0) return;
+  // A newer upstream build's ids are above this build's manifest. The preflight catches them
+  // before an update, but a direct start must refuse too instead of running on unrecognized
+  // schema. Partial runs are test fixtures that seed a newer row on purpose.
+  const newer =
+    throughId !== undefined
+      ? []
+      : recorded
+          .filter(
+            (row) =>
+              row.migration_id > BUILD_MIGRATION_HEAD &&
+              !isLegacyForkMigration({ id: row.migration_id, name: row.name }),
+          )
+          .map((row) => `${row.migration_id}_${row.name} (unknown to this build)`);
+  if (skipped.length === 0 && newer.length === 0) return;
+  const problems = [...skipped, ...newer].join(", ");
   return yield* new Migrator.MigrationError({
     kind: "BadState",
-    message: `This database's migration history would skip required schema migrations: ${skipped.join(", ")}. The migrator skips every id up to the highest recorded id (${latestRecordedId}), regardless of name. It was probably written by a different build. Start the build that wrote it, or report this migration history so an upgrade path can be added.`,
+    message: `This database's migration history does not match this build: ${problems}. The migrator skips every id up to the highest recorded id (${latestRecordedId}), regardless of name. It was probably written by a different build. Start the build that wrote it, or report this migration history so an upgrade path can be added.`,
   });
 });
 
@@ -361,9 +418,16 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     toMigrationInclusive === undefined || toMigrationInclusive >= FORK_MIGRATION_BASE_ID;
   const previewMigrations = includesV2 ? yield* reconcileV2PreviewMigration() : [];
   if (includesV2) {
-    yield* reconcileForkMigrationLedger();
-    yield* assertV2MigrationsCanRun(toMigrationInclusive);
-    yield* assertForkMigrationsCanRun(toMigrationInclusive);
+    // One transaction so a refusal rolls back the reconcile, never leaving a ledger a later run
+    // cannot recover.
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* reconcileForkMigrationLedger();
+        yield* assertV2MigrationsCanRun(toMigrationInclusive);
+        yield* assertForkMigrationsCanRun(toMigrationInclusive);
+      }),
+    );
   }
   const executedMigrations = [
     ...previewMigrations,

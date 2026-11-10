@@ -2,15 +2,44 @@
 import * as NodeFS from "node:fs";
 import * as NodeSqlite from "node:sqlite";
 
-import { migrationManifest } from "./Migrations.ts";
+import {
+  BUILD_FORK_MIGRATION_HEAD,
+  BUILD_MIGRATION_HEAD,
+  isLegacyForkMigration,
+} from "./Migrations.ts";
 
-export const BUILD_MIGRATION_HEAD = Math.max(...migrationManifest.map(([id]) => id));
+export { BUILD_FORK_MIGRATION_HEAD, BUILD_MIGRATION_HEAD };
 
-/** Migrations the database records, read-only. A missing or new database records none; one that
+/** Where a migration row lives. The two ledgers use disjoint id ranges, so a recorded id alone
+ * does not tell which build head it must be compared against. */
+export type MigrationLedger = "upstream" | "fork";
+
+export interface RecordedMigration {
+  readonly id: number;
+  readonly name: string;
+  readonly ledger: MigrationLedger;
+}
+
+export { isLegacyForkMigration };
+
+const readLedger = (
+  db: NodeSqlite.DatabaseSync,
+  table: "effect_sql_migrations" | "effect_sql_fork_migrations",
+  ledger: MigrationLedger,
+): ReadonlyArray<RecordedMigration> => {
+  const hasTable = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(table);
+  if (hasTable === undefined) return [];
+  return db
+    .prepare(`SELECT migration_id, name FROM ${table} ORDER BY migration_id`)
+    .all()
+    .map((row) => ({ id: Number(row.migration_id), name: String(row.name), ledger }));
+};
+
+/** Migrations either ledger records, read-only. A missing or new database records none; one that
  * exists but cannot be read is null, since its history is unknown. */
-export function recordedMigrations(
-  databasePath: string,
-): ReadonlyArray<{ readonly id: number; readonly name: string }> | null {
+export function recordedMigrations(databasePath: string): ReadonlyArray<RecordedMigration> | null {
   let db: NodeSqlite.DatabaseSync;
   try {
     db = new NodeSqlite.DatabaseSync(databasePath, { readOnly: true });
@@ -18,16 +47,10 @@ export function recordedMigrations(
     return NodeFS.existsSync(databasePath) ? null : [];
   }
   try {
-    const hasTable = db
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'",
-      )
-      .get();
-    if (hasTable === undefined) return [];
-    return db
-      .prepare("SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id")
-      .all()
-      .map((row) => ({ id: Number(row.migration_id), name: String(row.name) }));
+    return [
+      ...readLedger(db, "effect_sql_migrations", "upstream"),
+      ...readLedger(db, "effect_sql_fork_migrations", "fork"),
+    ].sort((left, right) => left.id - right.id);
   } catch {
     return null;
   } finally {
@@ -43,7 +66,10 @@ export function recordedMigrations(
  * build may have recorded more than this build knows. Undefined when the database is unreadable. */
 export function databaseMigrationHead(databasePath: string): number | undefined {
   const recorded = recordedMigrations(databasePath);
-  return recorded === null
-    ? undefined
-    : Math.max(BUILD_MIGRATION_HEAD, ...recorded.map(({ id }) => id));
+  if (recorded === null) return undefined;
+  return Math.max(
+    BUILD_MIGRATION_HEAD,
+    BUILD_FORK_MIGRATION_HEAD,
+    ...recorded.filter((row) => !isLegacyForkMigration(row)).map(({ id }) => id),
+  );
 }

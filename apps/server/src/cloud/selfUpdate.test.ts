@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeSqlite from "node:sqlite";
 import { expect, it } from "@effect/vitest";
 import type { ManagedPolicyDocument } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -16,6 +17,11 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
+import {
+  BUILD_FORK_MIGRATION_HEAD,
+  databaseMigrationHead,
+} from "../persistence/databaseMigrationHead.ts";
+import { forkMigrationManifest, migrationManifest } from "../persistence/Migrations.ts";
 import * as DesktopAppUpdate from "../desktopUpdate/DesktopAppUpdate.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as ProcessRunner from "../processRunner.ts";
@@ -456,4 +462,40 @@ it("a host crosses tracks only to a release that knows its whole database", () =
       databaseMigration: () => undefined,
     }),
   ).toContain("Cannot confirm");
+});
+
+it.layer(NodeServices.layer)("track switch reads the fork ledger", (it) => {
+  it.effect("a host refuses a switch a newer fork build migrated its database past", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const databasePath = path.join(
+        yield* fs.makeTempDirectoryScoped({ prefix: "t3-track-switch-fork-" }),
+        "state.sqlite",
+      );
+      const db = new NodeSqlite.DatabaseSync(databasePath);
+      db.exec("CREATE TABLE effect_sql_migrations (migration_id INTEGER PRIMARY KEY, name TEXT)");
+      const upstream = db.prepare("INSERT INTO effect_sql_migrations VALUES (?, ?)");
+      for (const [id, name] of migrationManifest) upstream.run(id, name);
+      db.exec(
+        "CREATE TABLE effect_sql_fork_migrations (migration_id INTEGER PRIMARY KEY, name TEXT)",
+      );
+      const fork = db.prepare("INSERT INTO effect_sql_fork_migrations VALUES (?, ?)");
+      for (const [id, name] of forkMigrationManifest) fork.run(id, name);
+      const futureForkId = Math.max(...forkMigrationManifest.map(([id]) => id)) + 1;
+      fork.run(futureForkId, "FromFutureFork");
+      db.close();
+
+      // The preflight/head used to read only the upstream ledger, so a fork row above the
+      // target release was invisible and the switch went ahead.
+      expect(
+        ServerSelfUpdate.trackSwitchBlockReason({
+          serverVersion: "0.1.4-nightly.20261027.3796",
+          targetVersion: "0.1.4",
+          targetDatabaseMigration: BUILD_FORK_MIGRATION_HEAD,
+          databaseMigration: () => databaseMigrationHead(databasePath),
+        }),
+      ).toContain("does not support yet");
+    }),
+  );
 });

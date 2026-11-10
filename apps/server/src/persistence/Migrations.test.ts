@@ -158,7 +158,7 @@ describe("runMigrations", () => {
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
-  it.effect("still starts after a newer build recorded a later V2 migration", () =>
+  it.effect("refuses to start after a newer upstream build recorded a later V2 migration", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* runMigrations();
@@ -166,8 +166,13 @@ describe("runMigrations", () => {
         INSERT INTO effect_sql_migrations (migration_id, name)
         VALUES (${newerMigrationId}, 'NewerV2Migration')
       `;
+      const before = yield* history;
 
-      assert.deepStrictEqual(yield* runMigrations(), []);
+      const exit = yield* Effect.exit(runMigrations());
+
+      assert.isTrue(Exit.isFailure(exit));
+      assert.include(String(exit), `${newerMigrationId}_NewerV2Migration (unknown to this build)`);
+      assert.deepStrictEqual(yield* history, before);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
@@ -259,6 +264,92 @@ describe("runMigrations", () => {
       assert.deepStrictEqual(yield* sql`SELECT result, created_at FROM peer_call_receipts`, [
         { result: '{"saved":true}', created_at: 42 },
       ]);
+      assert.deepStrictEqual(yield* runMigrations(), []);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("recovers the bc0a8f1f26 ledger that recorded PeerReceiptRetention at 82", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 79 });
+      yield* legacyMeshLayout;
+      yield* peerConnections;
+      yield* receiptRetention;
+      yield* sql`
+        INSERT INTO peer_call_receipts (environment_id, request_key, request_body, result, created_at)
+        VALUES ('studio', 'saved', '{}', '{"saved":true}', 42)
+      `;
+      // That build had no PeerIdentityBindings, so 82 meant the old PeerReceiptRetention.
+      yield* sql`
+        INSERT INTO effect_sql_migrations (migration_id, name)
+        VALUES (80, 'MeshLayout'), (81, 'PeerConnections'), (82, 'PeerReceiptRetention')
+      `;
+
+      assert.deepStrictEqual(yield* runMigrations(), [
+        [80, "ScheduledTaskThreadMode"],
+        [1002, "PeerIdentityBindings"],
+        [1003, "PeerReceiptRetention"],
+        [1004, "CloseTerminalRunNodes"],
+      ]);
+      assert.deepStrictEqual(yield* history, migrationManifest);
+      assert.deepStrictEqual(
+        (yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations ORDER BY migration_id`).map(
+          (row) => [row.migration_id, row.name] as const,
+        ),
+        forkMigrationManifest,
+      );
+      // The hole at 1002 is filled, so its tables exist and the server can start.
+      assert.deepStrictEqual(
+        yield* sql<{ readonly name: string }>`
+          SELECT name FROM sqlite_master
+          WHERE type = 'table' AND name = 'peer_client_identities'
+        `,
+        [{ name: "peer_client_identities" }],
+      );
+      assert.deepStrictEqual(
+        yield* sql`SELECT result, created_at FROM peer_call_receipts WHERE request_key = 'saved'`,
+        [{ result: '{"saved":true}', created_at: 42 }],
+      );
+      assert.deepStrictEqual(yield* runMigrations(), []);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("repairs a fork ledger a previous build left with a hole at 1002", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 79 });
+      yield* legacyMeshLayout;
+      yield* peerConnections;
+      yield* receiptRetention;
+      // The buggy reconcile moved the legacy 82 PeerReceiptRetention to 1003 and skipped 1002.
+      yield* sql`CREATE TABLE effect_sql_fork_migrations (
+        migration_id INTEGER PRIMARY KEY NOT NULL,
+        created_at datetime NOT NULL DEFAULT current_timestamp,
+        name VARCHAR(255) NOT NULL
+      )`;
+      yield* sql`
+        INSERT INTO effect_sql_fork_migrations (migration_id, name)
+        VALUES (1000, 'MeshLayout'), (1001, 'PeerConnections'), (1003, 'PeerReceiptRetention')
+      `;
+
+      assert.deepStrictEqual(yield* runMigrations(), [
+        [80, "ScheduledTaskThreadMode"],
+        [1002, "PeerIdentityBindings"],
+        [1003, "PeerReceiptRetention"],
+        [1004, "CloseTerminalRunNodes"],
+      ]);
+      assert.deepStrictEqual(
+        (yield* sql`SELECT migration_id FROM effect_sql_fork_migrations ORDER BY migration_id`).map(
+          (row) => row.migration_id,
+        ),
+        forkMigrationManifest.map(([id]) => id),
+      );
+      assert.isNotEmpty(
+        yield* sql<{ readonly name: string }>`
+          SELECT name FROM sqlite_master
+          WHERE type = 'table' AND name = 'peer_client_identities'
+        `,
+      );
       assert.deepStrictEqual(yield* runMigrations(), []);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
