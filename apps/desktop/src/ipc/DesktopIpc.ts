@@ -1,5 +1,6 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -140,7 +141,9 @@ export const make = (
                 runSync(Effect.logWarning("Desktop synchronous IPC denied", { channel, cause }));
                 return;
               }
-              event.returnValue = runSync(
+              // A synchronous IPC reply must never throw in the main process: an
+              // effect that suspends or fails answers null and is logged instead.
+              const exit = Effect.runSyncExitWith(context)(
                 Effect.gen(function* () {
                   yield* Effect.annotateCurrentSpan({ channel });
                   return yield* handler(event);
@@ -149,6 +152,17 @@ export const make = (
                   Effect.withSpan("desktop.ipc.invokeSync"),
                 ),
               );
+              if (Exit.isSuccess(exit)) {
+                event.returnValue = exit.value;
+              } else {
+                event.returnValue = null;
+                Effect.runForkWith(context)(
+                  Effect.logWarning("Desktop synchronous IPC could not answer synchronously", {
+                    channel,
+                    cause: exit.cause,
+                  }),
+                );
+              }
             });
           },
           catch: (cause) =>

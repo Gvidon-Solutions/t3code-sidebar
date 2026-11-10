@@ -264,6 +264,7 @@ describe("readMedia", () => {
               Layer.mock(ElectronWindow.ElectronWindow)({ main: Effect.succeedSome(main) }),
               Layer.mock(DesktopUi)({
                 selectionLabel: Effect.succeed(null),
+                cachedSelectionLabel: Effect.succeed(null),
                 connectionOrigins: Effect.succeed(["https://example.com"]),
               }),
             ),

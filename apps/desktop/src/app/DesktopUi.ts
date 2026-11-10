@@ -97,6 +97,8 @@ export class DesktopUi extends Context.Service<
   {
     readonly selection: Effect.Effect<DesktopUiSelection | null>;
     readonly selectionLabel: Effect.Effect<string | null>;
+    /** The last resolved selection label; never suspends, for synchronous IPC. */
+    readonly cachedSelectionLabel: Effect.Effect<string | null>;
     readonly connectionOrigins: Effect.Effect<ReadonlyArray<string>, DesktopUiError>;
     readonly sourceOrigin: Effect.Effect<URL | null>;
     readonly select: (
@@ -282,6 +284,21 @@ export const make = Effect.gen(function* () {
     return true;
   });
   // Safe storage becomes available after Electron is ready.
+  const labelCache = yield* Ref.make<string | null>(null);
+  const resolveLabelUncached = Effect.gen(function* () {
+    const current = yield* Ref.get(selected);
+    if (current === null) return null;
+    const raw = yield* catalog.get;
+    if (Option.isNone(raw)) return null;
+    const doc = yield* decodeCatalog(raw.value);
+    const label = doc.targets.find(
+      (target) => target.environmentId === current.environmentId,
+    )?.label;
+    return label === undefined || label.trim() === "" ? null : label.trim();
+  }).pipe(Effect.orElseSucceed(() => null));
+  const refreshLabel = resolveLabelUncached.pipe(
+    Effect.flatMap((label) => Ref.set(labelCache, label)),
+  );
   const restore = yield* Effect.cached(
     Effect.gen(function* () {
       if (yield* fs.exists(selectionPath)) {
@@ -304,6 +321,7 @@ export const make = Effect.gen(function* () {
             }),
           ),
           Effect.flatMap((value) => Ref.set(selected, value)),
+          Effect.andThen(refreshLabel),
           Effect.catch((error) =>
             Effect.logWarning("Saved desktop UI source could not be restored", error),
           ),
@@ -312,6 +330,10 @@ export const make = Effect.gen(function* () {
     }).pipe(
       Effect.catch((error) => Effect.logWarning("Saved desktop UI source restore failed", error)),
     ),
+  );
+  const resolveSelectionLabel = restore.pipe(
+    Effect.andThen(resolveLabelUncached),
+    Effect.tap((label) => Ref.set(labelCache, label)),
   );
   const select = Effect.fn("desktop.ui.select")(
     function* (input: DesktopUiSelection, options?: { readonly trustedClient?: boolean }) {
@@ -348,6 +370,7 @@ export const make = Effect.gen(function* () {
       yield* fs.writeFileString(selectionPath + ".tmp", encoded);
       yield* fs.rename(selectionPath + ".tmp", selectionPath);
       yield* Ref.set(selected, normalized);
+      yield* refreshLabel;
       return !environment.isDevelopment;
     },
     mutex.withPermits(1),
@@ -383,18 +406,8 @@ export const make = Effect.gen(function* () {
       ),
     ),
     selection: restore.pipe(Effect.andThen(Ref.get(selected))),
-    selectionLabel: Effect.gen(function* () {
-      yield* restore;
-      const current = yield* Ref.get(selected);
-      if (current === null) return null;
-      const raw = yield* catalog.get;
-      if (Option.isNone(raw)) return null;
-      const doc = yield* decodeCatalog(raw.value);
-      const label = doc.targets.find(
-        (target) => target.environmentId === current.environmentId,
-      )?.label;
-      return label === undefined || label.trim() === "" ? null : label.trim();
-    }).pipe(Effect.orElseSucceed(() => null)),
+    selectionLabel: resolveSelectionLabel,
+    cachedSelectionLabel: Ref.get(labelCache),
     sourceOrigin: Effect.gen(function* () {
       yield* restore;
       const current = yield* Ref.get(selected);

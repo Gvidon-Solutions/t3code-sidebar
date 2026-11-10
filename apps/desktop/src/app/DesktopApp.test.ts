@@ -164,6 +164,7 @@ it.effect(
             DesktopUi.DesktopUi.of({
               selection: Effect.succeed(null),
               selectionLabel: Effect.succeed(null),
+              cachedSelectionLabel: Effect.succeed(null),
               connectionOrigins: Effect.succeed([]),
               select: () => Effect.succeed(false),
               sourceOrigin: Effect.succeed(null),

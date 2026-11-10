@@ -100,7 +100,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   });
   yield* ipc.handleSync({
     channel: UI_SERVER_NAME_CHANNEL,
-    handler: (event) => (event ? desktopUi.selectionLabel : Effect.succeed(null)),
+    handler: (event) => (event ? desktopUi.cachedSelectionLabel : Effect.succeed(null)),
   });
   yield* ipc.handleSync({
     channel: UI_REQUEST_TOKEN_CHANNEL,

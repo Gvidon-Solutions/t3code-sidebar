@@ -86,3 +86,41 @@ effectIt.effect(
       expect(called).toBe(false);
     }).pipe(Effect.scoped),
 );
+
+effectIt.effect(
+  "answers null instead of crashing main when a synchronous handler suspends or fails",
+  () =>
+    Effect.gen(function* () {
+      const listeners = new Map<string, DesktopIpcSyncListener>();
+      const url = "t3code://app/";
+      const ipc = make(
+        {
+          removeHandler: () => undefined,
+          handle: () => undefined,
+          removeAllListeners: () => undefined,
+          on: (channel, callback) => {
+            listeners.set(channel, callback);
+          },
+        },
+        (event, channel) => authorizeDesktopIpc(event, channel, url),
+      );
+      yield* ipc.handleSync({
+        channel: Channels.UI_SERVER_NAME_CHANNEL,
+        // Reading the encrypted catalog suspends; a sync reply cannot wait for it.
+        handler: () => Effect.promise(() => Promise.resolve("studio")),
+      });
+      yield* ipc.handleSync({
+        channel: Channels.UI_INFO_CHANNEL,
+        handler: () => Effect.die(new Error("boom")),
+      });
+      for (const channel of [Channels.UI_SERVER_NAME_CHANNEL, Channels.UI_INFO_CHANNEL]) {
+        const event = {
+          sender: { id: 1 },
+          senderFrame: { url, parent: null },
+          returnValue: undefined as unknown,
+        };
+        expect(() => listeners.get(channel)!(event)).not.toThrow();
+        expect(event.returnValue).toBeNull();
+      }
+    }).pipe(Effect.scoped),
+);
