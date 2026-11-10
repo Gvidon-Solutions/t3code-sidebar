@@ -2546,3 +2546,29 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   WorkspaceChrome,FileMachineTag,MachinesSheet,DraftMachineCards}.tsx`, mobile
   `features/connection/{ConnectionEnvironmentRow,PullRequestRoutingSettings}.tsx`, and
   `agent-kit/skills/t3/SKILL.md`.
+
+### 2026-11-10 — Upstream v0.1.8 mobile under-the-hood work
+
+- **What.** Our mobile screens keep their layout while taking upstream's under-the-hood work:
+  the iOS socket compresses over the native module, DPoP proofs are signed by P-256 in native code
+  instead of JS, the thread list resumes from the saved shell cache (and reloads over HTTP when the
+  server cannot replay the gap), Mermaid diagrams and math fences render as on web, a long-press on
+  an image saves it to Photos, `/side` and `/btw` start a side chat from the composer, and the
+  composer/feed take upstream's keyboard, IME and scroll fixes (Android hardware Return, iOS reset
+  generations, end-anchored disclosure motion, one-shot re-wrap on a column resize).
+- **How.** Phase A restored the fork's `apps/mobile/src`, so the upstream TypeScript wrappers were
+  re-ported on top of the native modules and dependencies it had already carried. `nativeWebSocket`
+  routes Effect's socket layer through `T3WebSocket` on iOS and falls back to the global
+  constructor when the dev client predates the module. `features/cloud/dpop.ts` keeps the fork's
+  key-pair/proof API but asks `T3NativeControls` for generation, validation and signing;
+  `dpop.testing.ts` supplies a Node P-256 stand-in for tests. `environment-cache-store` already
+  read and wrote `ShellCacheOrigin`; it is now covered by tests. Mermaid uses `pele` (already in the
+  catalog) and `lib/mermaidSvg.ts`; math fences reuse Enriched Markdown with `latexMath`. Save
+  image reuses `downloadAttachmentForPreview` and the native module. `/side` reuses
+  `threadEnvironment.forkSideChat`/`startTurn` and the shared `parseSideChatCommand`.
+- **Where.** `apps/mobile/src/{native/{nativeWebSocket*,MermaidCodeBlock,EnrichedMarkdownText,
+  T3ComposerEditor.*,composerEditorRevision*},lib/{mermaidSvg,saveImageToLibrary,mediaActions.test},
+  features/cloud/{dpop,dpop.testing},features/threads/{useStartSideChat,use-composer-command-menu,
+  threadForkNavigation,ThreadFeed,ThreadComposer,ThreadDetailScreen,ThreadRouteScreen},
+  state/{mediaActions,use-thread-composer-state,use-composer-drafts},connection/
+  environment-cache-store.test.ts}`; tests in `apps/mobile/src/**/*.test.ts(x)`.
