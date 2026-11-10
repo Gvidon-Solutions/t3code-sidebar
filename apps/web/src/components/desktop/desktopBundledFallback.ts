@@ -107,8 +107,13 @@ export function desktopBundledRetryUrl(href: string): string {
  * path because desktop uses hash history.
  */
 export function desktopBundledLocalSettingsUrl(href: string): string {
-  // Drop the offline flags so leaving Settings does not show the offline page again.
-  const url = new URL(withoutBundledFallback(href));
+  // Stay on the bundled origin while the person picks another server. Dropping
+  // `bundled` would let the shell redirect back to the same down server.
+  const url = new URL(href);
+  url.searchParams.set("bundled", "1");
+  url.searchParams.delete("server");
+  url.searchParams.delete("name");
+  url.searchParams.delete("auth");
   url.hash = "/settings/connections";
   return url.toString();
 }

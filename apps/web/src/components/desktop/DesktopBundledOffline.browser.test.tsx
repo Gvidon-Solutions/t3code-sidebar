@@ -65,20 +65,23 @@ it("shows the normal bundled app when no direct source exists", () => {
   expect(showsDesktopBundledFallback({ fallback, pathname: "/settings" })).toBe(false);
 });
 
-it("sends the person to the bundled connections settings without looping back", () => {
+it("keeps the bundled origin while choosing another server, without looping back", () => {
   const url = new URL(
     desktopBundledLocalSettingsUrl(
       "t3code://app/?desktopWindowId=7&bundled=1&server=https%3A%2F%2Fstudio.example%2F&name=studio",
     ),
   );
-  // Leaving Settings must not bring the offline page back: no flags survive, so the
-  // window is the normal bundled app the whole time.
-  expect(url.searchParams.get("bundled")).toBeNull();
+  // Keep bundled=1 so the shell never redirects to the down server; drop only the
+  // address, which is what the offline page needs.
+  expect(url.searchParams.get("bundled")).toBe("1");
   expect(url.searchParams.get("server")).toBeNull();
   expect(url.searchParams.get("name")).toBeNull();
   expect(url.searchParams.get("desktopWindowId")).toBe("7");
   expect(url.hash).toBe("#/settings/connections");
-  expect(desktopBundledFallback(url.search)).toBeNull();
+  const fallback = desktopBundledFallback(url.search);
+  expect(fallback).toEqual({ server: null, name: null });
+  expect(showsDesktopBundledFallback({ fallback, pathname: "/" })).toBe(false);
+  expect(showsDesktopBundledFallback({ fallback, pathname: "/settings/connections" })).toBe(false);
 });
 
 it("retries by asking the shell for the server UI again", () => {

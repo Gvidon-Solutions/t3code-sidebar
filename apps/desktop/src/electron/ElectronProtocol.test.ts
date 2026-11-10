@@ -88,6 +88,38 @@ describe("ElectronProtocol", () => {
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
 
+  it.effect("serves bundled settings without redirecting to a down server", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(`${directory}/index.html`, "<html>bundled</html>");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      let serverOriginCalls = 0;
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        sourceSalt: "test-salt",
+        serverOrigin: async () => {
+          serverOriginCalls += 1;
+          return new URL("https://studio.example/");
+        },
+        clerkFrontendApiHostname: undefined,
+      });
+      // The URL `desktopBundledLocalSettingsUrl` builds for a down server.
+      const response = yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1&bundled=1#/settings/connections")),
+      );
+      assert.equal(response.status, 200);
+      assert.isNull(response.headers.get("location"));
+      assert.equal(yield* Effect.promise(() => response.text()), "<html>bundled</html>");
+      assert.equal(serverOriginCalls, 0);
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
+
   it.effect("proxies the stable renderer origin to the current app server", () =>
     Effect.gen(function* () {
       let handler: ((request: Request) => Promise<Response>) | undefined;
