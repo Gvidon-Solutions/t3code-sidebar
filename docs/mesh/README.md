@@ -81,11 +81,18 @@ of overridable update headers. Those inputs must be baked into the first APK; Ja
 cannot repair them through OTA. Publish manifests after building that APK: older manifests
 are correctly ignored in favor of the embedded bundle.
 
-Desktop's stable custom protocol follows the active connected thread/draft server. The
-`app/DesktopUi.ts` service validates saved origins and persists the choice; `ipc/methods/ui.ts`
-accepts only the main application frame. Web's `DesktopUiCoordinator` waits for in-flight sends
-(including server-drain retries), then flushes drafts before reloading for a source/version
-change; About shows UI/shell versions and actual source.
+Desktop's stable custom protocol follows the active connected thread/draft server, but only
+when that server's UI is strictly newer than the shell's app version: equal, older and unknown
+versions keep the bundled client and its saved connections, and the choice is re-evaluated on
+every launch and on a server version change. A disabled saved connection, an unknown environment
+and the local backend while it is off are not sources at all; they resolve to the bundled client.
+The `app/DesktopUi.ts` service validates saved origins, owns that version and usability decision,
+and persists the choice; it also keeps the source and credential per renderer/origin so another
+window selecting its own environment cannot change this window. `ipc/methods/ui.ts` accepts only
+the main application frame. Web's `DesktopUiCoordinator` waits for in-flight sends (including
+server-drain retries), then flushes drafts before reloading for a source/version change; a
+bundled-only environment switch is persisted without a reload. About shows UI/shell versions and
+actual source.
 `ElectronProtocol.ts` pins assets to their document's server, strips local credentials and
 compressed-response transport headers, and loads the bundled copy when the document is offline.
 Relay-only connections without a direct UI route explicitly use the bundled UI. Never mix
@@ -256,12 +263,17 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   New-thread machine choice is one card per machine, derived by
   `meshLayout/draftMachineCards.ts` (primary first; single machine hides the cards). Its
   reachability comes from mesh peer state, not this client's connections, so a machine the
-  mesh reaches says "Available through <machine>" instead of "not connected". The composer no
-  longer carries a machine chip; a started thread names the machine in its header. A lite
+  mesh reaches says "Available through <machine>" instead of "not connected". Sidebar project
+  tags use the same `meshMachineReachable` rule: only a machine the mesh reports offline is
+  dimmed. Reachability needs a live direct/relayed connection, a fresh exchange (two minutes) or
+  a linked peer that is itself live; a stale or merely configured link does not count. The composer no longer carries a machine chip; a started thread names the machine in
+  its header. A lite
   replica never offers Initialize Git in the right panel: `chat/threadDetailsGit.ts` hides
   Version Control there, because git lives on the main copy. First run with an incomplete mesh
   shows one dismissible "Connect to all machines in your mesh" prompt; it switches saved
-  connections back on and sends never-added machines to Connections. Project rows draw one tag
+  connections back on and sends never-added machines to Connections. The reduced desktop server
+  UI never shows that prompt or the Settings › Mesh connect-all action: it has no saved
+  connections there and cannot act on them. Project rows draw one tag
   per machine; copies on machines this client is not connected to are dimmed in the same strip.
   A linked thread's header shows its machine tag only, never a peer label or environment id.
   The composer voice toggle follows the thread's provider on its own machine and, for a draft,
@@ -326,8 +338,12 @@ Shared client-runtime decisions keep web and Android answering these questions t
 
 - **Desktop fallback.** `ElectronProtocol` appends the attempted `server` to the bundled
   fallback URL; web `desktopBundledFallback.ts` reads it and `DesktopBundledOffline` draws
-  "Can't reach <server> — Retry". Retry drops `bundled` so the shell tries the saved server
-  again. The dev target-origin path also returns a plain retry page instead of dying.
+  "Can't reach <server> — Retry". The offline page requires a known direct server: a bundled URL
+  with no server is the normal bundled client, never an outage. Retry drops `bundled` so the
+  shell tries the saved server again. "Choose another server" keeps `bundled=1` and drops only
+  the address, so Settings stays bundled while a server is down and leaving Settings cannot loop
+  back into the page. The label falls back to the address for an unnamed IP machine. The dev
+  target-origin path also returns a plain retry page instead of dying.
 - **Home and draft choice.** mobile `useSidebarWorkspaces` applies client-runtime
   `withImplicitWorkspace`, so a mesh with machines but no configured workspaces still shows one
   "Personal" folder list. Card wording separates a scratch draft (`draftHasProject: false`, no
@@ -398,16 +414,17 @@ Shared client-runtime decisions keep web and Android answering these questions t
   banner passes `reconnecting: false` once that window passed.
 - **Offline machine cards.** `draftMachineCards` carries the mesh's `offline` state and its
   `offlineMachineText` age from `DraftMachineCards` and the mobile new-task flow, so the card says
-  "Offline" while "Not connected here" stays for a machine the mesh reaches but this device does
-  not. The age is the tooltip.
+  "Offline" while a machine the mesh reaches but this device does not is named
+  "Available through <machine>" (its `viaLabel` or the mesh). "Not connected here" stays only for
+  a machine the mesh does not reach. The age is the tooltip.
 - **Machine tags.** `projectMachineStrip` takes `offlineEnvironmentIds`; a tag is muted when the
   mesh reports it offline, independent of this client's connection. Web keeps the tag in the
   breadcrumb immediately after the thread title (the title truncates first); the project picker
   shows tags only and keeps names in its tooltip/`aria-label`. Link dialogs start from
   `defaultLinkSource` (this machine first).
 - **Desktop fallback.** `ElectronProtocol` adds the attempted server's configured name to the
-  bundled fallback URL; `DesktopBundledOffline` shows plain copy, the address as a muted detail, and
-  no "bundled UI" wording.
+  bundled fallback URL; `DesktopBundledOffline` shows plain copy, names the machine by that name
+  or its host/address, keeps the address as a muted detail, and uses no "bundled UI" wording.
 
 ### Draft identity, machine choice and offline fallbacks
 
@@ -1345,7 +1362,11 @@ for pinned infrastructure SSH keys and isolation tests. Git history is not rewri
 cleanup; removing historical disclosures is a separate repository-owner decision.
 
 Desktop server UI uses a separate `t3code://server-<webContentsId>-<source hash>` origin and a reduced
-`desktopShell` bridge. Storage is also separated when the selected server changes. It cannot read desktop credentials, catalogs, legacy storage, SSH,
+`desktopShell` bridge. The shell serves it only while its server version is strictly newer than the
+bundled client; an equal, older or unknown version, a disabled/unknown connection and the local
+backend while off all keep the bundled origin. Storage is also separated when the selected server
+changes. The source and credential are tracked per window/origin: each server-UI window keeps its
+own document and bearer while another window selects a different environment. It cannot read desktop credentials, catalogs, legacy storage, SSH,
 exposure controls or media IPC. Server UI navigation and popup attempts cannot launch native external handlers. Every IPC entry checks the sender's top frame and current
 application origin. Protocol routing tracks main-frame navigation events because Electron's
 Fetch Request does not retain navigation mode; an HTML Accept header never changes the

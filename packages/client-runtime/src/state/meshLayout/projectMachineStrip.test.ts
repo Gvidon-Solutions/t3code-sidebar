@@ -85,6 +85,50 @@ describe("projectMachineStrip", () => {
     expect(new Set(model.chips.map((chip) => chip.environmentId)).size).toBe(model.chips.length);
   });
 
+  it("does not dim a copy the mesh reaches without a saved connection", () => {
+    const config = {
+      ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
+      projectMounts: { demo: [rep("lab", "primary"), rep("at", "replica")] },
+    };
+    const model = projectMachineStrip(
+      config,
+      {
+        ...group,
+        environmentIds: ["lab"],
+        knownEnvironmentIds: ["lab"],
+        reachableEnvironmentIds: ["at"],
+      },
+      [],
+    );
+    expect(model.chips.map((chip) => [chip.environmentId, chip.muted])).toEqual([
+      ["lab", false],
+      ["at", false],
+    ]);
+    expect(model.description).not.toContain("offline");
+    expect(model.description).not.toContain("not connected");
+  });
+
+  it("still dims a reachable machine the mesh reports offline", () => {
+    const config = {
+      ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
+      projectMounts: { demo: [rep("lab", "primary"), rep("at", "replica")] },
+    };
+    const model = projectMachineStrip(
+      config,
+      {
+        ...group,
+        environmentIds: ["lab"],
+        knownEnvironmentIds: ["lab"],
+        reachableEnvironmentIds: ["at"],
+        offlineEnvironmentIds: ["at"],
+      },
+      [],
+    );
+    expect(model.chips.find((chip) => chip.environmentId === "at")?.muted).toBe(true);
+  });
+
   it("orders primaries in layout order, then replicas, and counts all hidden chips", () => {
     const config = {
       ...empty,

@@ -88,6 +88,38 @@ describe("ElectronProtocol", () => {
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
 
+  it.effect("serves bundled settings without redirecting to a down server", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(`${directory}/index.html`, "<html>bundled</html>");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      let serverOriginCalls = 0;
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        sourceSalt: "test-salt",
+        serverOrigin: async () => {
+          serverOriginCalls += 1;
+          return new URL("https://studio.example/");
+        },
+        clerkFrontendApiHostname: undefined,
+      });
+      // The URL `desktopBundledLocalSettingsUrl` builds for a down server.
+      const response = yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1&bundled=1#/settings/connections")),
+      );
+      assert.equal(response.status, 200);
+      assert.isNull(response.headers.get("location"));
+      assert.equal(yield* Effect.promise(() => response.text()), "<html>bundled</html>");
+      assert.equal(serverOriginCalls, 0);
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
+
   it.effect("proxies the stable renderer origin to the current app server", () =>
     Effect.gen(function* () {
       let handler: ((request: Request) => Promise<Response>) | undefined;
@@ -979,11 +1011,15 @@ describe("ElectronProtocol", () => {
         assetDirectory: directory,
         sourceSalt: "test-salt",
         serverOrigin: async () => new URL("https://studio.example/"),
-        serverAuthorization: async () => ({ authorization: "owner-bearer", environmentId: "studio" }),
+        serverAuthorization: async () => ({
+          authorization: "owner-bearer",
+          environmentId: "studio",
+        }),
         clerkFrontendApiHostname: undefined,
       });
       netFetchMock.mockImplementation(async (url: string) => {
-        if (String(url).endsWith("/api/auth/session")) return Response.json({ authenticated: true });
+        if (String(url).endsWith("/api/auth/session"))
+          return Response.json({ authenticated: true });
         return new Response("server", {
           headers: {
             "content-type": "text/html",
@@ -996,7 +1032,9 @@ describe("ElectronProtocol", () => {
         handler!(navigation("t3code://app/?desktopWindowId=1")),
       );
       const pageUrl = redirect.headers.get("location")!;
-      yield* Effect.promise(() => handler!(navigation(pageUrl, { headers: { accept: "text/html" } })));
+      yield* Effect.promise(() =>
+        handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
+      );
       const forged = yield* Effect.promise(() =>
         handler!(navigation(`t3code://server-1-${"f".repeat(24)}/`)),
       );
@@ -1015,5 +1053,4 @@ describe("ElectronProtocol", () => {
       assert.equal(forwarded.get("authorization"), "Bearer owner-bearer");
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
-
 });

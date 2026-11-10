@@ -33,16 +33,16 @@ it("shortens an unnamed server without showing its address in the sentence", () 
   expect(desktopFallbackServerLabel({ server: null, name: null })).toBe("the server");
 });
 
-it("never names an IP address as a machine and caps a long configured name", () => {
+it("names an IP-only machine by its address and caps a long configured name", () => {
   expect(desktopFallbackServerLabel({ server: "http://192.168.1.5:3795", name: null })).toBe(
-    "the server",
+    "192.168.1.5:3795",
   );
   expect(desktopFallbackServerLabel({ server: "http://100.64.0.3:3795", name: null })).toBe(
-    "the server",
+    "100.64.0.3:3795",
   );
   expect(
     desktopFallbackServerLabel({ server: "http://[fd7a:115c:a1e0::1]:3795", name: null }),
-  ).toBe("the server");
+  ).toBe("[fd7a:115c:a1e0::1]:3795");
   const longName = "a".repeat(DESKTOP_FALLBACK_NAME_MAX + 20);
   expect(desktopFallbackServerLabel({ server: null, name: longName })).toHaveLength(
     DESKTOP_FALLBACK_NAME_MAX,
@@ -56,15 +56,32 @@ it("keeps the normal branch on the bundled settings route", () => {
   expect(showsDesktopBundledFallback({ fallback: null, pathname: "/" })).toBe(false);
 });
 
-it("sends the person to the bundled connections settings to choose another server", () => {
+it("shows the normal bundled app when no direct source exists", () => {
+  // The live Windows desktop: local environment off and the active thread on a
+  // disabled saved connection. A null source must never become the offline page.
+  const fallback = desktopBundledFallback("?desktopWindowId=7&bundled=1");
+  expect(fallback).toEqual({ server: null, name: null });
+  expect(showsDesktopBundledFallback({ fallback, pathname: "/" })).toBe(false);
+  expect(showsDesktopBundledFallback({ fallback, pathname: "/settings" })).toBe(false);
+});
+
+it("keeps the bundled origin while choosing another server, without looping back", () => {
   const url = new URL(
     desktopBundledLocalSettingsUrl(
       "t3code://app/?desktopWindowId=7&bundled=1&server=https%3A%2F%2Fstudio.example%2F&name=studio",
     ),
   );
+  // Keep bundled=1 so the shell never redirects to the down server; drop only the
+  // address, which is what the offline page needs.
   expect(url.searchParams.get("bundled")).toBe("1");
+  expect(url.searchParams.get("server")).toBeNull();
+  expect(url.searchParams.get("name")).toBeNull();
   expect(url.searchParams.get("desktopWindowId")).toBe("7");
   expect(url.hash).toBe("#/settings/connections");
+  const fallback = desktopBundledFallback(url.search);
+  expect(fallback).toEqual({ server: null, name: null });
+  expect(showsDesktopBundledFallback({ fallback, pathname: "/" })).toBe(false);
+  expect(showsDesktopBundledFallback({ fallback, pathname: "/settings/connections" })).toBe(false);
 });
 
 it("retries by asking the shell for the server UI again", () => {

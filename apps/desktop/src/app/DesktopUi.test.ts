@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Ref from "effect/Ref";
@@ -91,11 +91,6 @@ describe("Desktop connected UI source", () => {
               "Failure",
             );
           }
-          expect(
-            (yield* ui
-              .select({ ...studio, environmentId: EnvironmentId.make("unknown") })
-              .pipe(Effect.result))._tag,
-          ).toBe("Failure");
           const restored = yield* make;
           expect(yield* restored.selection).toEqual(cloudbox);
           yield* restored.recordSource(null, "offline");
@@ -132,7 +127,11 @@ describe("Desktop connected UI source", () => {
               disabledEnvironmentIds: ["studio"],
             }),
           );
-          expect((yield* restored.select(studio).pipe(Effect.result))._tag).toBe("Failure");
+          // A disabled saved connection still answers the selection, but only with the
+          // bundled source; it can never gate a server document.
+          expect(yield* restored.select(studio)).toBe(false);
+          expect((yield* restored.selection)?.httpBaseUrl).toBeNull();
+          expect(yield* restored.sourceOrigin).toBeNull();
         });
         yield* program.pipe(
           Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
@@ -230,11 +229,13 @@ describe("Desktop connected UI source", () => {
         expect((yield* ui.selection)?.httpBaseUrl).toBe(studio.httpBaseUrl);
         expect(yield* ui.sourceOrigin).toEqual(origin);
 
-        // A reduced server UI switch hops through the trusted client.
+        // A reduced server UI cannot move the shell's persisted selection, and its
+        // own origin keeps its credential while another window selects elsewhere.
         expect(
           yield* ui.select({ ...cloudbox, serverVersion: "3" }, { trustedClient: false }),
-        ).toBe(true);
-        expect((yield* ui.selection)?.httpBaseUrl).toBeNull();
+        ).toBe(false);
+        expect((yield* ui.selection)?.httpBaseUrl).toBe(studio.httpBaseUrl);
+        expect(yield* ui.serverAuthorization(origin)).not.toBeNull();
         expect(yield* ui.select({ ...cloudbox, serverVersion: "3" })).toBe(true);
         expect((yield* ui.selection)?.httpBaseUrl).toBe(cloudbox.httpBaseUrl);
       });
@@ -538,7 +539,7 @@ describe("Desktop connected UI source", () => {
         yield* ui.select({
           environmentId: cloudbox.environmentId,
           httpBaseUrl: origin,
-          serverVersion: "1",
+          serverVersion: "2",
         }),
       ).toBe(true);
       expect(yield* ui.serverAuthorization(new URL(origin + "/"))).toEqual({
@@ -554,6 +555,498 @@ describe("Desktop connected UI source", () => {
         },
       ]);
       expect(yield* ui.serverAuthorization(new URL(origin + "/"))).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("uses the server UI only when it is strictly newer than the bundled client", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped();
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: [
+            {
+              _tag: "BearerConnectionTarget",
+              connectionId: "studio",
+              environmentId: "studio",
+              label: "studio",
+            },
+          ],
+          profiles: [
+            {
+              _tag: "BearerConnectionProfile",
+              connectionId: "studio",
+              environmentId: "studio",
+              label: "studio",
+              httpBaseUrl: studio.httpBaseUrl,
+              wsBaseUrl: "wss://studio.example",
+            },
+          ],
+          credentials: [
+            {
+              connectionId: "studio",
+              credential: { _tag: "BearerConnectionCredential", token: "token-a" },
+            },
+          ],
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      );
+      const makeUi = (stateDir: string) =>
+        make.pipe(
+          Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+            stateDir,
+            appVersion: "0.1.6",
+            isDevelopment: false,
+          } as DesktopEnvironment.DesktopEnvironment["Service"]),
+          Effect.provideService(
+            Catalog.DesktopConnectionCatalogStore,
+            Catalog.DesktopConnectionCatalogStore.of({
+              get: Ref.get(raw).pipe(Effect.asSome),
+              set: () => Effect.succeed(true),
+            }),
+          ),
+          Effect.provideService(Exposure.DesktopServerExposure, {
+            backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+          } as Exposure.DesktopServerExposure["Service"]),
+          Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+            getBearerToken: Effect.fail(
+              new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+            ),
+          } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+          Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+            activeEnvironments: Effect.succeed([]),
+          } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
+        );
+
+      const cases = [
+        { version: "0.1.7", serverUi: true },
+        { version: "0.1.6", serverUi: false },
+        { version: "0.1.5", serverUi: false },
+        { version: "studio-1", serverUi: false },
+        { version: "", serverUi: false },
+      ] as const;
+      for (const [index, entry] of cases.entries()) {
+        const stateDir = `${root}/${index}`;
+        yield* fs.makeDirectory(stateDir, { recursive: true });
+        yield* fs.writeFileString(
+          `${stateDir}/ui-source.json`,
+          JSON.stringify({
+            environmentId: "studio",
+            httpBaseUrl: studio.httpBaseUrl,
+            serverVersion: entry.version,
+          }),
+        );
+        const ui = yield* makeUi(stateDir);
+        expect((yield* ui.selection)?.httpBaseUrl, entry.version).toBe(
+          entry.serverUi ? studio.httpBaseUrl : null,
+        );
+        const sourceOrigin = yield* ui.sourceOrigin;
+        expect(sourceOrigin, entry.version).toEqual(
+          entry.serverUi ? new URL(studio.httpBaseUrl + "/") : null,
+        );
+        yield* ui.recordSource(sourceOrigin);
+        expect((yield* ui.getInfo).source, entry.version).toBe(
+          entry.serverUi ? "server" : "bundled",
+        );
+      }
+
+      const selectDir = `${root}/select`;
+      const selectable = yield* makeUi(selectDir);
+      expect(
+        yield* selectable.select({
+          environmentId: studio.environmentId,
+          httpBaseUrl: studio.httpBaseUrl,
+          serverVersion: "0.1.6",
+        }),
+      ).toBe(false);
+      expect((yield* selectable.selection)?.httpBaseUrl).toBeNull();
+      expect(yield* selectable.serverAuthorization(new URL(studio.httpBaseUrl + "/"))).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("never serves a disabled or unknown environment, or the local backend while off", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const stateDir = yield* fs.makeTempDirectoryScoped();
+      const entries = [
+        { environmentId: "studio", httpBaseUrl: "https://studio.example", disabled: false },
+        { environmentId: "cloudbox", httpBaseUrl: "https://cloudbox.example", disabled: false },
+        { environmentId: "atlas", httpBaseUrl: "http://127.0.0.1:4080", disabled: true },
+      ];
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: entries.map((entry) => ({
+            _tag: "BearerConnectionTarget",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+          })),
+          profiles: entries.map((entry) => ({
+            _tag: "BearerConnectionProfile",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+            httpBaseUrl: entry.httpBaseUrl,
+            wsBaseUrl: entry.httpBaseUrl.replace("https", "wss"),
+          })),
+          credentials: entries.map((entry) => ({
+            connectionId: entry.environmentId,
+            credential: {
+              _tag: "BearerConnectionCredential",
+              token: `token-${entry.environmentId}`,
+            },
+          })),
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: ["atlas"],
+        }),
+      );
+      const ui = yield* make.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "0.1.6",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        // The local backend is off: this is the live Windows desktop's setup.
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+        Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+          getBearerToken: Effect.fail(
+            new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+          ),
+        } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Effect.succeed([]),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
+      );
+
+      for (const selection of [
+        {
+          environmentId: EnvironmentId.make("atlas"),
+          httpBaseUrl: "http://127.0.0.1:4080/",
+        },
+        {
+          environmentId: EnvironmentId.make("unknown-machine"),
+          httpBaseUrl: "https://unknown.example/",
+        },
+        {
+          environmentId: EnvironmentId.make(PRIMARY_LOCAL_ENVIRONMENT_ID),
+          httpBaseUrl: "http://127.0.0.1:3774/",
+        },
+      ]) {
+        expect(
+          yield* ui.select({ ...selection, serverVersion: "0.1.7" }),
+          selection.environmentId,
+        ).toBe(false);
+        expect((yield* ui.selection)?.environmentId, selection.environmentId).toBe(
+          selection.environmentId,
+        );
+        expect((yield* ui.selection)?.httpBaseUrl, selection.environmentId).toBeNull();
+        expect(yield* ui.sourceOrigin, selection.environmentId).toBeNull();
+        expect((yield* ui.getInfo).source, selection.environmentId).toBe("bundled");
+      }
+
+      // A persisted disabled source also restores as the bundled client, not an error.
+      yield* fs.writeFileString(
+        stateDir + "/ui-source.json",
+        JSON.stringify({
+          environmentId: "atlas",
+          httpBaseUrl: "http://127.0.0.1:4080/",
+          serverVersion: "0.1.7",
+        }),
+      );
+      const restored = yield* make.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "0.1.6",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+        Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+          getBearerToken: Effect.fail(
+            new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+          ),
+        } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Effect.succeed([]),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
+      );
+      expect((yield* restored.selection)?.httpBaseUrl).toBeNull();
+      expect(yield* restored.sourceOrigin).toBeNull();
+      expect((yield* restored.getInfo).source).toBe("bundled");
+      // A disabled source is not kept in the window's CSP origin list.
+      expect(yield* restored.connectionOrigins).not.toContain("http://127.0.0.1:4080");
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("does not reload for a bundled-only environment switch", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const stateDir = yield* fs.makeTempDirectoryScoped();
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionTarget",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+          })),
+          profiles: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionProfile",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+            httpBaseUrl: entry.httpBaseUrl,
+            wsBaseUrl: entry.httpBaseUrl.replace("https", "wss"),
+          })),
+          credentials: [studio, cloudbox].map((entry) => ({
+            connectionId: entry.environmentId,
+            credential: {
+              _tag: "BearerConnectionCredential",
+              token: `token-${entry.environmentId}`,
+            },
+          })),
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      );
+      const ui = yield* make.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "0.1.6",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+        Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+          getBearerToken: Effect.fail(
+            new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+          ),
+        } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Effect.succeed([]),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
+      );
+      expect(
+        yield* ui.select({
+          environmentId: studio.environmentId,
+          httpBaseUrl: null,
+          serverVersion: "0.1.6",
+        }),
+      ).toBe(false);
+      expect((yield* ui.selection)?.environmentId).toBe(studio.environmentId);
+      expect((yield* ui.selection)?.httpBaseUrl).toBeNull();
+      expect(
+        yield* ui.select({
+          environmentId: cloudbox.environmentId,
+          httpBaseUrl: null,
+          serverVersion: "0.1.6",
+        }),
+      ).toBe(false);
+      expect((yield* ui.selection)?.environmentId).toBe(cloudbox.environmentId);
+      expect((yield* ui.selection)?.httpBaseUrl).toBeNull();
+      expect(
+        yield* ui.select({
+          environmentId: cloudbox.environmentId,
+          httpBaseUrl: cloudbox.httpBaseUrl,
+          serverVersion: "0.1.7",
+        }),
+      ).toBe(true);
+      expect((yield* ui.selection)?.httpBaseUrl).toBe(cloudbox.httpBaseUrl);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps a server UI credential per source origin across windows", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const stateDir = yield* fs.makeTempDirectoryScoped();
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionTarget",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+          })),
+          profiles: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionProfile",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+            httpBaseUrl: entry.httpBaseUrl,
+            wsBaseUrl: entry.httpBaseUrl.replace("https", "wss"),
+          })),
+          credentials: [studio, cloudbox].map((entry) => ({
+            connectionId: entry.environmentId,
+            credential: {
+              _tag: "BearerConnectionCredential",
+              token: `token-${entry.environmentId}`,
+            },
+          })),
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      );
+      const ui = yield* make.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "0.1.6",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+        Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+          getBearerToken: Effect.fail(
+            new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+          ),
+        } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Effect.succeed([]),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
+      );
+      expect(yield* ui.select(studio)).toBe(true);
+      const studioOrigin = new URL(studio.httpBaseUrl + "/");
+      expect(yield* ui.serverAuthorization(studioOrigin)).toEqual({
+        authorization: "token-studio",
+        environmentId: studio.environmentId,
+      });
+
+      // Window 2 moves the shell to the bundled client; window 1 keeps its credential.
+      expect(
+        yield* ui.select({
+          environmentId: cloudbox.environmentId,
+          httpBaseUrl: null,
+          serverVersion: "0.1.6",
+        }),
+      ).toBe(true);
+      expect(yield* ui.sourceOrigin).toBeNull();
+      expect(yield* ui.serverAuthorization(studioOrigin)).toEqual({
+        authorization: "token-studio",
+        environmentId: studio.environmentId,
+      });
+
+      // An untrusted window refreshes only its own origin, never the shell selection.
+      expect(yield* ui.select(studio, { trustedClient: false })).toBe(false);
+      expect((yield* ui.selection)?.environmentId).toBe(cloudbox.environmentId);
+      expect((yield* ui.selection)?.httpBaseUrl).toBeNull();
+      expect(yield* ui.serverAuthorization(studioOrigin)).toEqual({
+        authorization: "token-studio",
+        environmentId: studio.environmentId,
+      });
+
+      // Its own server becoming not-newer withdraws that window's credential only.
+      expect(
+        yield* ui.select({ ...studio, serverVersion: "0.1.6" }, { trustedClient: false }),
+      ).toBe(false);
+      expect(yield* ui.serverAuthorization(studioOrigin)).toBeNull();
+      expect(yield* ui.sourceOrigin).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps each window's source document while another window selects", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const stateDir = yield* fs.makeTempDirectoryScoped();
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionTarget",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+          })),
+          profiles: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionProfile",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+            httpBaseUrl: entry.httpBaseUrl,
+            wsBaseUrl: entry.httpBaseUrl.replace("https", "wss"),
+          })),
+          credentials: [studio, cloudbox].map((entry) => ({
+            connectionId: entry.environmentId,
+            credential: {
+              _tag: "BearerConnectionCredential",
+              token: `token-${entry.environmentId}`,
+            },
+          })),
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      );
+      const ui = yield* make.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "0.1.6",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+        Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+          getBearerToken: Effect.fail(
+            new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+          ),
+        } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Effect.succeed([]),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
+      );
+      expect(yield* ui.select(studio, { rendererId: 1 })).toBe(true);
+      expect(yield* ui.sourceOriginFor(1)).toEqual(new URL(studio.httpBaseUrl + "/"));
+      expect(yield* ui.select({ ...cloudbox, httpBaseUrl: null }, { rendererId: 2 })).toBe(true);
+      expect(yield* ui.sourceOrigin).toBeNull();
+      expect(yield* ui.sourceOriginFor(1)).toEqual(new URL(studio.httpBaseUrl + "/"));
+      expect(yield* ui.sourceOriginFor(2)).toBeNull();
+      expect(yield* ui.sourceOriginFor(3)).toBeNull();
+      expect(yield* ui.select(studio, { rendererId: 1, trustedClient: false })).toBe(false);
+      expect(yield* ui.sourceOriginFor(1)).toEqual(new URL(studio.httpBaseUrl + "/"));
+      expect(yield* ui.sourceOrigin).toBeNull();
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

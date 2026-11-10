@@ -97,6 +97,9 @@ export function DesktopUiCoordinator() {
         prepared: readPreparedConnection(environmentId),
         primaryBearerToken,
         trustedClient,
+        serverVersion: version ?? null,
+        // The shell's app version is the bundled client's UI version.
+        bundledVersion: loaded.shellVersion,
       });
       const changed = await ui.select({
         environmentId,

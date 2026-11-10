@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   compareSemverVersions,
+  isStrictlyNewerSemver,
   normalizeSemverVersion,
   parseSemver,
   satisfiesSemverRange,
@@ -77,6 +78,25 @@ describe("semver helpers", () => {
     expect(satisfiesSemverRange("0.0.4", "^0.0.3")).toBe(false);
     expect(satisfiesSemverRange("0.0.0", "^0.0.0")).toBe(true);
     expect(satisfiesSemverRange("0.0.1", "^0.0.0")).toBe(false);
+  });
+
+  it("only calls a strictly newer known version newer", () => {
+    expect(isStrictlyNewerSemver("0.1.7", "0.1.6")).toBe(true);
+    expect(isStrictlyNewerSemver("0.1.6", "0.1.6")).toBe(false);
+    expect(isStrictlyNewerSemver("0.1.5", "0.1.6")).toBe(false);
+    expect(isStrictlyNewerSemver("0.1.7-sidebar.72", "0.1.7")).toBe(false);
+    expect(isStrictlyNewerSemver("0.1.8-sidebar.1", "0.1.7")).toBe(true);
+    // An unknown version is never newer, whichever side it is on.
+    expect(isStrictlyNewerSemver("studio-1", "0.1.6")).toBe(false);
+    expect(isStrictlyNewerSemver("0.1.7", "shell-1")).toBe(false);
+    expect(isStrictlyNewerSemver("", "0.1.6")).toBe(false);
+    expect(isStrictlyNewerSemver("0.1.7", "  ")).toBe(false);
+    // The fork orders `-sidebar.N` builds numerically; a plain upstream release is
+    // semver-newer than any prerelease of the same upstream version.
+    expect(isStrictlyNewerSemver("0.1.7-sidebar.100", "0.1.7-sidebar.72")).toBe(true);
+    expect(isStrictlyNewerSemver("0.1.7-sidebar.72", "0.1.7-sidebar.100")).toBe(false);
+    expect(isStrictlyNewerSemver("0.1.7", "0.1.7-sidebar.100")).toBe(true);
+    expect(isStrictlyNewerSemver("0.1.7-sidebar.100", "0.1.7")).toBe(false);
   });
 
   it("keeps the range checker stringifiable and executable as plain JavaScript", () => {

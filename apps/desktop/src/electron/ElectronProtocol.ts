@@ -78,10 +78,11 @@ export type DesktopProtocolRegistrationInput = {
   | {
       readonly assetDirectory: string;
       readonly sourceSalt: string;
-      readonly serverOrigin?: () => Promise<URL | null>;
+      readonly serverOrigin?: (rendererId?: number) => Promise<URL | null>;
       readonly serverName?: () => Promise<string | null>;
       readonly serverAuthorization?: (
         origin: URL,
+        rendererId?: number,
       ) => Promise<{ readonly authorization: string; readonly environmentId: string } | null>;
       readonly noteAuthorizationRejected?: (origin: URL, authorization: string) => Promise<void>;
       readonly onSource?: (origin: URL | null, reason?: string) => Promise<void>;
@@ -663,7 +664,7 @@ export const make = Effect.gen(function* () {
                   !requestUrl.searchParams.has("bundled") &&
                   input.serverOrigin
                 ) {
-                  const origin = await input.serverOrigin();
+                  const origin = await input.serverOrigin(Number(id));
                   if (origin) {
                     const next = `${input.scheme}://${serverUiSourceHost(Number(id), origin, input.sourceSalt)}/`;
                     navigations.set(Number(id), next);
@@ -671,7 +672,7 @@ export const make = Effect.gen(function* () {
                   }
                 }
                 if (serverHost && isDocument && input.serverOrigin) {
-                  const origin = await input.serverOrigin();
+                  const origin = await input.serverOrigin(rendererId);
                   if (origin) {
                     if (
                       requestUrl.host !== serverUiSourceHost(rendererId, origin, input.sourceSalt)
@@ -681,7 +682,8 @@ export const make = Effect.gen(function* () {
                       navigations.set(rendererId, next);
                       return Response.redirect(next, 302);
                     }
-                    const credential = (await input.serverAuthorization?.(origin)) ?? null;
+                    const credential =
+                      (await input.serverAuthorization?.(origin, rendererId)) ?? null;
                     const session = serverUiSession(requestUrl.host, credential);
                     const authorization = credential?.authorization ?? null;
                     if (authorization !== null) {
@@ -743,7 +745,8 @@ export const make = Effect.gen(function* () {
                   if (!isSameServerUiCaller(request, requestUrl)) {
                     return new Response(null, { status: 403 });
                   }
-                  const credential = (await input.serverAuthorization?.(origin)) ?? null;
+                  const credential =
+                    (await input.serverAuthorization?.(origin, rendererId)) ?? null;
                   return runPromise(
                     proxyRequest(
                       request,

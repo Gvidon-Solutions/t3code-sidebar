@@ -195,13 +195,15 @@ const bootstrap = Effect.gen(function* () {
           serverAuthorization: (origin) => resolveUiOrigin(desktopUi.serverAuthorization(origin)),
           noteAuthorizationRejected: (origin, authorization) =>
             resolveUiOrigin(desktopUi.noteAuthorizationRejected(origin, authorization)),
-          serverOrigin: () =>
+          serverOrigin: (rendererId) =>
             resolveUiOrigin(
-              desktopUi.sourceOrigin.pipe(
-                Effect.map((selected) =>
-                  preferConfiguredUiOrigin(Option.getOrNull(uiOrigin), selected),
+              desktopUi
+                .sourceOriginFor(rendererId ?? null)
+                .pipe(
+                  Effect.map((selected) =>
+                    preferConfiguredUiOrigin(Option.getOrNull(uiOrigin), selected),
+                  ),
                 ),
-              ),
             ),
           serverName: () => resolveUiOrigin(desktopUi.selectionLabel),
         }),

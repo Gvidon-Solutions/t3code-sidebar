@@ -14,10 +14,19 @@ import * as NodePath from "node:path";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { parseSemver } from "@t3tools/shared/semver";
 import * as EP from "../src/electron/ElectronProtocol.ts";
 import * as Ipc from "../src/ipc/DesktopIpc.ts";
 import * as Channels from "../src/ipc/channels.ts";
+import * as DesktopUi from "../src/app/DesktopUi.ts";
+import * as DesktopEnvironment from "../src/app/DesktopEnvironment.ts";
+import * as DesktopConnectionCatalogStore from "../src/app/DesktopConnectionCatalogStore.ts";
+import * as DesktopServerExposure from "../src/backend/DesktopServerExposure.ts";
+import * as DesktopLocalEnvironmentAuth from "../src/backend/DesktopLocalEnvironmentAuth.ts";
+import * as DesktopSshEnvironment from "../src/ssh/DesktopSshEnvironment.ts";
+import { isBundledUiUrl } from "../src/ipc/rendererTrust.ts";
 
 const REPO = NodePath.resolve(import.meta.dirname, "../../..");
 const output = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-server-ui-proof-"));
@@ -45,42 +54,105 @@ async function waitFor(label, predicate, timeoutMs = 30_000) {
   throw new Error(`${label} timed out: ${last instanceof Error ? last.message : String(last)}`);
 }
 
-function addProjectOffline(baseDir, projectDir) {
-  const result = NodeChildProcess.spawnSync(
-    process.env.T3_PROOF_NODE ?? "node",
-    [
-      NodePath.join(REPO, "apps/server/src/bin.ts"),
-      "project",
-      "add",
-      projectDir,
-      "--base-dir",
-      baseDir,
-    ],
-    { cwd: REPO, encoding: "utf8" },
-  );
-  if (result.status !== 0) {
-    throw new Error(`project add failed: ${result.stderr || result.stdout}`);
-  }
+function serverEnvironment(home, binDir) {
+  return {
+    ...process.env,
+    HOME: home,
+    XDG_CONFIG_HOME: NodePath.join(home, ".config"),
+    XDG_DATA_HOME: NodePath.join(home, ".local/share"),
+    XDG_CACHE_HOME: NodePath.join(home, ".cache"),
+    SSH_AUTH_SOCK: "",
+    GIT_CONFIG_GLOBAL: NodePath.join(home, ".gitconfig"),
+    GIT_CONFIG_NOSYSTEM: "1",
+    T3_MESH_AGENT_HOME: home,
+    T3_MESH_SSH_HOME: home,
+    T3CODE_TELEMETRY_ENABLED: "false",
+    PATH: `${binDir}:${process.env.PATH ?? ""}`,
+  };
 }
 
-async function mintBearerToken(origin, pairingToken) {
-  const form = new URLSearchParams({
-    grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-    subject_token: pairingToken,
-    subject_token_type: "urn:t3:params:oauth:token-type:environment-bootstrap",
-    requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
-  });
-  const response = await net.fetch(new URL("/oauth/token", origin).toString(), {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-  });
-  if (!response.ok) throw new Error(`token exchange failed (HTTP ${response.status})`);
-  const body = await response.json();
-  if (typeof body.access_token !== "string" || body.access_token.length === 0) {
-    throw new Error("token exchange returned no access token");
+function runServerCli(baseDir, home, binDir, args) {
+  const result = NodeChildProcess.spawnSync(
+    process.env.T3_PROOF_NODE ?? "node",
+    [NodePath.join(REPO, "apps/server/src/bin.ts"), ...args, "--base-dir", baseDir],
+    { cwd: REPO, env: serverEnvironment(home, binDir), encoding: "utf8" },
+  );
+  if (result.status !== 0) {
+    throw new Error(`${args.join(" ")} failed: ${result.stderr || result.stdout}`);
   }
-  return body.access_token;
+  return result.stdout;
+}
+
+function addProject(baseDir, projectDir, home, binDir) {
+  runServerCli(baseDir, home, binDir, ["project", "add", projectDir]);
+}
+
+function mintToken(baseDir, home, binDir) {
+  const token = runServerCli(baseDir, home, binDir, [
+    "auth",
+    "session",
+    "issue",
+    "--ttl",
+    "12h",
+    "--token-only",
+  ])
+    .trim()
+    .split("\n")[0];
+  if (typeof token !== "string" || token.length === 0)
+    throw new Error("session issue returned no token");
+  return token;
+}
+
+async function connectRpc(origin, token) {
+  const response = await net.fetch(new URL("/api/auth/websocket-ticket", origin).toString(), {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`websocket ticket failed (HTTP ${response.status})`);
+  const { ticket } = await response.json();
+  const socket = new WebSocket(
+    `${origin.replace(/^http/, "ws").replace(/\/$/, "")}/ws?wsTicket=${encodeURIComponent(ticket)}&orchestrationProtocol=2&clientSurface=cli`,
+  );
+  await new Promise((resolve, reject) => {
+    socket.addEventListener("open", resolve, { once: true });
+    socket.addEventListener("error", reject, { once: true });
+  });
+  let sequence = 0;
+  const pending = new Map();
+  socket.addEventListener("message", (event) => {
+    for (const line of String(event.data).split("\n")) {
+      if (!line) continue;
+      const message = JSON.parse(line);
+      if (message._tag === "Ping") socket.send(JSON.stringify({ _tag: "Pong" }));
+      const request = pending.get(message.requestId);
+      if (!request) continue;
+      if (message._tag === "Exit") {
+        pending.delete(message.requestId);
+        clearTimeout(request.timer);
+        if (message.exit._tag === "Success") request.resolve(message.exit.value);
+        else request.reject(new Error(JSON.stringify(message.exit.cause)));
+      }
+    }
+  });
+  return (tag, payload = {}) =>
+    new Promise((resolve, reject) => {
+      const id = `proof-${++sequence}`;
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`RPC ${tag} timed out`));
+      }, 30_000);
+      pending.set(id, { resolve, reject, timer });
+      socket.send(JSON.stringify({ _tag: "Request", id, tag, payload, headers: [] }));
+    });
+}
+
+function olderVersion(version) {
+  const parsed = parseSemver(version);
+  if (parsed === null) return null;
+  if (parsed.patch > 0) return `${parsed.major}.${parsed.minor}.${parsed.patch - 1}`;
+  if (parsed.minor > 0) return `${parsed.major}.${parsed.minor - 1}.0`;
+  if (parsed.major > 0) return `${parsed.major - 1}.0.0`;
+  return null;
 }
 
 function freePort() {
@@ -147,7 +219,7 @@ async function buildPreload() {
   return preload;
 }
 
-function startServer(baseDir, port, binDir) {
+function startServer(baseDir, port, binDir, home) {
   const child = NodeChildProcess.spawn(
     process.env.T3_PROOF_NODE ?? "node",
     [
@@ -165,11 +237,7 @@ function startServer(baseDir, port, binDir) {
     ],
     {
       cwd: REPO,
-      env: {
-        ...process.env,
-        T3CODE_TELEMETRY_ENABLED: "false",
-        PATH: `${binDir}:${process.env.PATH ?? ""}`,
-      },
+      env: serverEnvironment(home, binDir),
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -242,23 +310,44 @@ process.on("unhandledRejection", (error) => console.error("unhandledRejection", 
 process.on("uncaughtException", (error) => console.error("uncaughtException", error));
 
 async function main() {
+  console.log("proof: start");
   ensureWebBuild();
   NodeFSP.mkdir(OUT, { recursive: true });
   await app.whenReady();
+  console.log("proof: app ready");
   const defaultSession = session.defaultSession;
   const assets = NodePath.join(REPO, "apps/web/dist");
   const preload = await buildPreload();
   const httpPort = await freePort();
   const tlsPort = await freePort();
+  const cloudboxPort = await freePort();
   const baseDir = NodePath.join(output, "server");
   const binDir = NodePath.join(output, "bin");
+  const studioHome = NodePath.join(output, "studio-home");
+  const cloudboxHome = NodePath.join(output, "cloudbox-home");
+  const cloudboxBaseDir = NodePath.join(output, "cloudbox-server");
+  const cloudboxBinDir = NodePath.join(output, "cloudbox-bin");
   await NodeFSP.mkdir(binDir, { recursive: true });
+  await NodeFSP.mkdir(cloudboxBinDir, { recursive: true });
+  await NodeFSP.mkdir(studioHome, { recursive: true });
+  await NodeFSP.mkdir(cloudboxHome, { recursive: true });
   const hostnamectl = NodePath.join(binDir, "hostnamectl");
   await NodeFSP.writeFile(hostnamectl, "#!/bin/sh\nprintf 'studio\\n'\n", { mode: 0o755 });
+  await NodeFSP.writeFile(
+    NodePath.join(cloudboxBinDir, "hostnamectl"),
+    "#!/bin/sh\nprintf 'cloudbox\\n'\n",
+    { mode: 0o755 },
+  );
   const projectDir = NodePath.join(output, "studio-project");
   await NodeFSP.mkdir(projectDir, { recursive: true });
   await NodeFSP.writeFile(NodePath.join(projectDir, "README.md"), "# studio-project\n");
   NodeChildProcess.execFileSync("git", ["init", "-q"], { cwd: projectDir });
+  const cloudboxProjectDir = NodePath.join(output, "cloudbox-project");
+  await NodeFSP.mkdir(cloudboxProjectDir, { recursive: true });
+  await NodeFSP.writeFile(NodePath.join(cloudboxProjectDir, "README.md"), "# cloudbox-project\n");
+  NodeChildProcess.execFileSync("git", ["init", "-q"], { cwd: cloudboxProjectDir });
+  addProject(baseDir, projectDir, studioHome, binDir);
+  addProject(cloudboxBaseDir, cloudboxProjectDir, cloudboxHome, cloudboxBinDir);
   await NodeFSP.writeFile(
     NodePath.join(assets, "w2-preview.html"),
     '<!doctype html><meta charset="utf-8"><title>HTML preview</title><body style="margin:0;font:15px system-ui,sans-serif;background:#faf9f7;color:#222"><main style="padding:24px"><h1 style="margin:0 0 8px;font-size:20px">HTML preview</h1><p style="margin:0;color:#666">Served by this machine and rendered inside the server UI.</p><p style="margin:16px 0 0;padding:12px 14px;border:1px solid #ddd;border-radius:10px;background:#fff">If you can read this, the preview surface is working.</p><script>fetch("/api/w2-iframe-post", { method: "POST", body: "side effect" }).catch(() => {})</script></main></body>',
@@ -276,29 +365,149 @@ async function main() {
   };
   await defaultSession.setCertificateVerifyProc(verifyCertificate);
   const origin = new URL(`https://127.0.0.1:${tlsPort}/`);
+  // The desktop catalog uses the TLS proxy, but the servers' own RPC and mesh links
+  // speak their loopback HTTP origins.
+  const studioHttpOrigin = new URL(`http://127.0.0.1:${httpPort}/`);
   let serverOriginUrl = origin;
   const proxy = await createHttpsProxy(certificate, httpPort, tlsPort);
 
-  let server = startServer(baseDir, httpPort, binDir);
+  let server = startServer(baseDir, httpPort, binDir, studioHome);
   try {
     await waitFor("server ready", () => !server.exited && server.pairingToken !== null, 60_000);
   } catch (error) {
     console.error(server.log);
     throw error;
   }
+  let cloudboxServer = startServer(cloudboxBaseDir, cloudboxPort, cloudboxBinDir, cloudboxHome);
+  try {
+    await waitFor(
+      "cloudbox server ready",
+      () => !cloudboxServer.exited && cloudboxServer.pairingToken !== null,
+      60_000,
+    );
+  } catch (error) {
+    console.error(cloudboxServer.log);
+    throw error;
+  }
+  console.log("proof: servers ready");
+  const cloudboxOrigin = new URL(`http://127.0.0.1:${cloudboxPort}/`);
+  const studioToken = mintToken(baseDir, studioHome, binDir);
+  const cloudboxToken = mintToken(cloudboxBaseDir, cloudboxHome, cloudboxBinDir);
+  const studioDescriptorResponse = await net.fetch(
+    new URL("/.well-known/t3/environment", studioHttpOrigin).toString(),
+  );
+  if (!studioDescriptorResponse.ok) throw new Error("studio environment descriptor failed");
+  const studioDescriptor = await studioDescriptorResponse.json();
+  const cloudboxDescriptorResponse = await net.fetch(
+    new URL("/.well-known/t3/environment", cloudboxOrigin).toString(),
+  );
+  if (!cloudboxDescriptorResponse.ok) throw new Error("cloudbox environment descriptor failed");
+  const cloudboxDescriptor = await cloudboxDescriptorResponse.json();
+  const studioRpc = await connectRpc(studioHttpOrigin.href, studioToken);
+  const cloudboxRpc = await connectRpc(cloudboxOrigin.href, cloudboxToken);
+  await studioRpc("server.updateSettings", {
+    patch: { meshEnabled: true, linkedEnvironmentsEnabled: true },
+  });
+  await cloudboxRpc("server.updateSettings", {
+    patch: { meshEnabled: true, linkedEnvironmentsEnabled: true },
+  });
+  const pairingCode = JSON.parse(
+    runServerCli(cloudboxBaseDir, cloudboxHome, cloudboxBinDir, [
+      "auth",
+      "pairing",
+      "create",
+      "--ttl",
+      "20m",
+      "--json",
+    ]),
+  );
+  await studioRpc("peerLinks.link", {
+    url: cloudboxOrigin.href,
+    pairingCode: pairingCode.credential,
+    access: "full-access",
+  });
+  console.log("proof: mesh linked");
+  await waitFor(
+    "mesh config on studio names both machines",
+    async () => {
+      const value = await studioRpc("meshConfig.get", {});
+      return Object.keys(value.current.doc.machines ?? {}).length === 2 ? value : null;
+    },
+    60_000,
+  );
 
   let selectCalls = [];
   let serverName = "Studio";
   let serverUiCredentialOverride = null;
   let rejected = [];
   let serverUiPageUrl = null;
+  let useRealUi = true;
+  let activeUi = null;
   let catalog = {
     schemaVersion: 1,
-    targets: [],
-    profiles: [],
-    credentials: [],
+    targets: [
+      {
+        _tag: "BearerConnectionTarget",
+        connectionId: "studio",
+        environmentId: studioDescriptor.environmentId,
+        label: studioDescriptor.label,
+      },
+      {
+        _tag: "BearerConnectionTarget",
+        connectionId: "cloudbox",
+        environmentId: cloudboxDescriptor.environmentId,
+        label: cloudboxDescriptor.label,
+      },
+      {
+        _tag: "BearerConnectionTarget",
+        connectionId: "atlas",
+        environmentId: "atlas",
+        label: "atlas",
+      },
+    ],
+    profiles: [
+      {
+        _tag: "BearerConnectionProfile",
+        connectionId: "studio",
+        environmentId: studioDescriptor.environmentId,
+        label: studioDescriptor.label,
+        httpBaseUrl: origin.href,
+        wsBaseUrl: origin.href.replace(/^https/, "wss"),
+      },
+      {
+        _tag: "BearerConnectionProfile",
+        connectionId: "cloudbox",
+        environmentId: cloudboxDescriptor.environmentId,
+        label: cloudboxDescriptor.label,
+        httpBaseUrl: cloudboxOrigin.href,
+        wsBaseUrl: cloudboxOrigin.href.replace(/^http/, "ws"),
+      },
+      {
+        _tag: "BearerConnectionProfile",
+        connectionId: "atlas",
+        environmentId: "atlas",
+        label: "atlas",
+        httpBaseUrl: "http://127.0.0.1:4080/",
+        wsBaseUrl: "ws://127.0.0.1:4080/",
+      },
+    ],
+    credentials: [
+      {
+        connectionId: "studio",
+        credential: { _tag: "BearerConnectionCredential", token: studioToken },
+      },
+      {
+        connectionId: "cloudbox",
+        credential: { _tag: "BearerConnectionCredential", token: cloudboxToken },
+      },
+      {
+        connectionId: "atlas",
+        credential: { _tag: "BearerConnectionCredential", token: "disabled-token" },
+      },
+    ],
     remoteDpopTokens: [],
-    disabledEnvironmentIds: [],
+    // The live Windows desktop keeps one saved connection toggled off.
+    disabledEnvironmentIds: ["atlas"],
   };
   const info = {
     source: "server",
@@ -308,6 +517,7 @@ async function main() {
     shellVersion: "1",
     reason: null,
   };
+  console.log("proof: window");
   const window = new BrowserWindow({
     show: true,
     width: 1280,
@@ -382,6 +592,26 @@ async function main() {
       await sleep(700);
     }
   };
+  const bundledAppShell = async () => {
+    if (window.webContents.getURL().startsWith("t3code://server-")) return false;
+    const text = await bodyText();
+    return (
+      !text.includes("Can't reach") &&
+      !text.includes("T3 Code failed to start") &&
+      !text.includes("Pair with this environment") &&
+      text.trim().length > 20
+    );
+  };
+  const waitForStableBundled = async () => {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (await bundledAppShell()) {
+        await sleep(1_000);
+        if (await bundledAppShell()) return;
+      }
+      await sleep(300);
+    }
+    throw new Error("bundled app shell did not settle");
+  };
 
   try {
     await Effect.runPromise(
@@ -390,7 +620,46 @@ async function main() {
           const ipc = Ipc.make(ipcMain, () => {});
           const sync = (channel, handler) =>
             ipc.handleSync({ channel, handler: () => Effect.succeed(handler()) });
-          yield* sync(Channels.UI_SERVER_ORIGIN_CHANNEL, () => serverOriginUrl.href);
+          const proofUi = (stateDir, appVersion) =>
+            DesktopUi.make.pipe(
+              Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+                stateDir,
+                appVersion,
+                isDevelopment: false,
+              }),
+              Effect.provideService(
+                DesktopConnectionCatalogStore.DesktopConnectionCatalogStore,
+                DesktopConnectionCatalogStore.DesktopConnectionCatalogStore.of({
+                  get: Effect.sync(() => Option.some(JSON.stringify(catalog))),
+                  set: () => Effect.succeed(true),
+                }),
+              ),
+              Effect.provideService(DesktopServerExposure.DesktopServerExposure, {
+                backendConfig: Effect.succeed({
+                  port: 0,
+                  httpBaseUrl: new URL("http://127.0.0.1"),
+                }),
+              }),
+              Effect.provideService(DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth, {
+                getBearerToken: Effect.fail(
+                  new DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+                ),
+              }),
+              Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+                activeEnvironments: Effect.succeed([]),
+              }),
+            );
+          const equalUi = yield* proofUi(
+            NodePath.join(output, "ui-equal"),
+            studioDescriptor.serverVersion,
+          );
+          const olderStudioVersion = olderVersion(studioDescriptor.serverVersion);
+          NodeAssert.ok(olderStudioVersion, "studio server version is semantic");
+          const newerUi = yield* proofUi(NodePath.join(output, "ui-newer"), olderStudioVersion);
+          activeUi = equalUi;
+          yield* sync(Channels.UI_SERVER_ORIGIN_CHANNEL, () =>
+            useRealUi ? (serverOriginUrl?.href ?? "") : serverOriginUrl.href,
+          );
           yield* sync(Channels.UI_SERVER_NAME_CHANNEL, () => serverName);
           yield* sync(Channels.GET_APP_BRANDING_CHANNEL, () => null);
           yield* sync(Channels.GET_SYSTEM_LOCALE_CHANNEL, () => null);
@@ -400,16 +669,23 @@ async function main() {
           yield* sync(Channels.GET_WINDOW_FULLSCREEN_STATE_CHANNEL, () => false);
           yield* ipc.handle({
             channel: Channels.UI_SELECT_CHANNEL,
-            handler: (selection) =>
-              Effect.sync(() => {
-                selectCalls.push(selection);
+            handler: (selection, event) => {
+              selectCalls.push(selection);
+              if (!useRealUi) {
                 info.environmentId = selection?.environmentId ?? info.environmentId;
-                return false;
-              }),
+                return Effect.succeed(false);
+              }
+              const trusted =
+                event?.senderFrame?.url !== undefined && isBundledUiUrl(event.senderFrame.url);
+              return activeUi.select(selection, {
+                trustedClient: trusted,
+                rendererId: event?.sender?.id,
+              });
+            },
           });
           yield* ipc.handle({
             channel: Channels.UI_INFO_CHANNEL,
-            handler: () => Effect.succeed(info),
+            handler: () => (useRealUi ? activeUi.getInfo : Effect.succeed(info)),
           });
           yield* ipc.handle({
             channel: Channels.REVEAL_WINDOW_CHANNEL,
@@ -444,10 +720,13 @@ async function main() {
             Channels.PREVIEW_SET_ANNOTATION_THEME_CHANNEL,
             Channels.PREVIEW_SET_FORWARDED_SHORTCUTS_CHANNEL,
             Channels.WEB_LINK_READY_CHANNEL,
-            Channels.PROBE_REMOTE_EDITORS_CHANNEL,
           ]) {
             yield* ipc.handle({ channel, handler: () => Effect.succeed(null) });
           }
+          yield* ipc.handle({
+            channel: Channels.PROBE_REMOTE_EDITORS_CHANNEL,
+            handler: () => Effect.succeed([]),
+          });
 
           const protocolService = yield* EP.ElectronProtocol;
           yield* ipc.handleSync({
@@ -468,10 +747,17 @@ async function main() {
             scheme: "t3code",
             assetDirectory: assets,
             sourceSalt: "proof-salt",
-            serverOrigin: async () => serverOriginUrl,
-            serverName: async () => serverName,
+            serverOrigin: async (rendererId) =>
+              useRealUi
+                ? await Effect.runPromise(activeUi.sourceOriginFor(rendererId ?? null))
+                : serverOriginUrl,
+            serverName: async () => {
+              if (!useRealUi) return serverName;
+              return (await Effect.runPromise(activeUi.selectionLabel)) ?? serverName;
+            },
             serverAuthorization: async (origin) => {
               if (serverUiCredentialOverride !== null) return serverUiCredentialOverride;
+              if (useRealUi) return await Effect.runPromise(activeUi.serverAuthorization(origin));
               const target = origin.href.replace(/\/$/, "");
               const profile = catalog.profiles.find(
                 (entry) =>
@@ -489,15 +775,178 @@ async function main() {
                     environmentId: profile.environmentId,
                   };
             },
-            noteAuthorizationRejected: async (_origin, token) => {
+            noteAuthorizationRejected: async (origin, token) => {
+              if (useRealUi) {
+                await Effect.runPromise(activeUi.noteAuthorizationRejected(origin, token));
+                return;
+              }
               rejected.push(token);
             },
-            connectionOrigins: async () => [serverOriginUrl.origin],
-            onSource: async () => {},
+            connectionOrigins: async () =>
+              useRealUi
+                ? await Effect.runPromise(activeUi.connectionOrigins).catch(() => [])
+                : [serverOriginUrl.origin],
+            onSource: async (source, reason) => {
+              if (useRealUi) await Effect.runPromise(activeUi.recordSource(source, reason));
+            },
             clerkFrontendApiHostname: undefined,
           });
 
           yield* Effect.promise(async () => {
+            console.log("proof: phase equal start");
+            // (a) Equal versions keep the bundled client and its saved connections.
+            useRealUi = true;
+            activeUi = equalUi;
+            selectCalls = [];
+            serverUiPageUrl = null;
+            await window.loadURL(`t3code://app/?desktopWindowId=${window.webContents.id}`);
+            await waitForStableBundled();
+            await waitFor(
+              "both saved machines connect in the bundled client",
+              async () => {
+                const text = await bodyText();
+                return text.includes("studio-project") && text.includes("cloudbox-project");
+              },
+              60_000,
+            );
+            NodeAssert.ok(
+              !window.webContents.getURL().startsWith("t3code://server-"),
+              "an equal server version keeps the bundled client",
+            );
+            const lastSelect = selectCalls.at(-1);
+            NodeAssert.ok(lastSelect !== undefined, "the bundled client selected a source");
+            NodeAssert.equal(
+              lastSelect.httpBaseUrl,
+              null,
+              "an equal server version selects the bundled source",
+            );
+            await screenshot("07-equal-bundled.png");
+            console.log(
+              JSON.stringify({
+                phase: "equal-versions",
+                source: "bundled",
+                machines: ["studio", "cloudbox"],
+              }),
+            );
+
+            console.log("proof: phase local-off start");
+            // Local environment off, one saved connection toggled off, two connected:
+            // the live Windows desktop. A stale bundled flag with no direct source must
+            // render the normal bundled app, not the offline page, before and after
+            // Settings.
+            await window.loadURL(
+              `t3code://app/?desktopWindowId=${window.webContents.id}&bundled=1#/settings/connections`,
+            );
+            await waitFor(
+              "bundled connections settings",
+              async () => (await bodyText()).includes("Connections"),
+              60_000,
+            );
+            await window.loadURL(
+              `t3code://app/?desktopWindowId=${window.webContents.id}&bundled=1#/`,
+            );
+            await waitForStableBundled();
+            NodeAssert.ok(!(await bodyText()).includes("Can't reach"));
+            await waitFor(
+              "projects after leaving settings",
+              async () => (await bodyText()).includes("studio-project"),
+              30_000,
+            );
+            await screenshot("08-local-off-bundled.png");
+            console.log(
+              JSON.stringify({
+                phase: "local-off-bundled",
+                source: "bundled",
+                offlinePage: false,
+              }),
+            );
+
+            console.log("proof: phase newer start");
+            // (b) A newer server UI is used, and the mesh shows the second machine.
+            useRealUi = true;
+            activeUi = newerUi;
+            selectCalls = [];
+            await Effect.runPromise(
+              newerUi.select({
+                environmentId: studioDescriptor.environmentId,
+                httpBaseUrl: origin.href,
+                serverVersion: studioDescriptor.serverVersion,
+              }),
+            );
+            serverUiPageUrl = null;
+            await loadServerUi(null);
+            await waitFor("server UI authenticated for a newer server", appShell, 60_000);
+            await finishOnboarding();
+            await waitForStableShell();
+            await waitFor(
+              "studio project in the server UI",
+              async () => (await bodyText()).includes("studio-project"),
+              60_000,
+            );
+            const newerInfo = await evaluate("window.desktopShell.ui.getInfo()");
+            NodeAssert.equal(newerInfo.source, "server");
+            NodeAssert.equal(newerInfo.environmentId, studioDescriptor.environmentId);
+            NodeAssert.ok(
+              !(await bodyText()).includes("Connect to all machines in your mesh"),
+              "the reduced server UI does not offer the connect-all prompt",
+            );
+            NodeAssert.equal(
+              await evaluate("document.querySelector('[data-mesh-connect-prompt]') === null"),
+              true,
+            );
+            await waitFor(
+              "mesh footer names both machines",
+              async () => {
+                const text = await bodyText();
+                return text.includes("Mesh · 2 machines") && text.includes("synced");
+              },
+              30_000,
+            );
+            await waitFor(
+              "new-thread machine cards",
+              () => evaluate("document.querySelector('[data-draft-machine-cards]') !== null"),
+              30_000,
+            );
+            await waitFor(
+              "cloudbox card is available through the mesh",
+              async () => {
+                const text = await evaluate(
+                  "document.querySelector('[data-draft-machine-cards]')?.innerText ?? ''",
+                );
+                return text.includes("Available through");
+              },
+              30_000,
+            );
+            const cardsText = await evaluate(
+              "document.querySelector('[data-draft-machine-cards]')?.innerText ?? ''",
+            );
+            NodeAssert.ok(
+              cardsText.includes("Available through studio"),
+              `the cloudbox card names the mesh path, got: ${cardsText}`,
+            );
+            NodeAssert.ok(
+              !cardsText.includes("Not connected here"),
+              `a reachable machine is not called not connected, got: ${cardsText}`,
+            );
+            await screenshot("09-newer-server-ui-mesh.png");
+            console.log(
+              JSON.stringify({
+                phase: "newer-server-ui",
+                source: "server",
+                machines: ["studio", "cloudbox"],
+                connectAllPrompt: false,
+              }),
+            );
+
+            // Legacy server-UI proof phases below use the manual shell bridge so their
+            // rejection and restart knobs stay independent of the shared service.
+            useRealUi = false;
+            serverOriginUrl = origin;
+            serverUiCredentialOverride = null;
+            rejected = [];
+            serverUiPageUrl = null;
+
+            console.log("proof: phase legacy start");
             // (a) Pairing in server UI mode reaches an authenticated session and the shell.
             const token = server.pairingToken;
             NodeAssert.ok(token, "server pairing token");
@@ -575,7 +1024,6 @@ async function main() {
             // (b) A chunk failure during a restart waits for the server and reloads.
             server.child.kill("SIGTERM");
             await waitFor("server stopped", () => server.exited, 20_000);
-            addProjectOffline(baseDir, projectDir);
             await evaluate(
               `setTimeout(() => { void import("/assets/definitely-missing-chunk.js"); }, 0); true`,
             );
@@ -586,7 +1034,7 @@ async function main() {
             );
             await screenshot("03-reconnecting.png");
 
-            server = startServer(baseDir, httpPort, binDir);
+            server = startServer(baseDir, httpPort, binDir, studioHome);
             await waitFor(
               "server restarted",
               () => !server.exited && server.pairingToken !== null,
@@ -614,7 +1062,54 @@ async function main() {
             await sleep(500);
             await screenshot("05-offline-fallback.png");
 
-            server = startServer(baseDir, httpPort, binDir);
+            // (c2) The Settings escape keeps the bundled origin, so it cannot bounce
+            // back to the same down server.
+            const chooseHref = await evaluate(
+              `document.querySelector('a[href*="#/settings/connections"]')?.href ?? null`,
+            );
+            NodeAssert.ok(chooseHref, "the offline page offers Choose another server");
+            const chooseUrl = new URL(chooseHref);
+            NodeAssert.equal(chooseUrl.searchParams.get("bundled"), "1");
+            NodeAssert.equal(chooseUrl.searchParams.get("server"), null);
+            await window.loadURL(chooseHref);
+            await waitFor(
+              "bundled settings from the offline page",
+              async () => {
+                const text = await bodyText();
+                return (
+                  window.webContents.getURL().startsWith("t3code://app/") &&
+                  text.includes("Connections") &&
+                  !text.includes("Can't reach") &&
+                  !text.includes("Loading")
+                );
+              },
+              60_000,
+            );
+            await sleep(1_500);
+            await screenshot("10-offline-settings-escape.png");
+            const leaveUrl = new URL(chooseHref);
+            leaveUrl.hash = "/";
+            await window.loadURL(leaveUrl.toString());
+            await waitFor(
+              "bundled app after leaving offline settings",
+              async () => {
+                const text = await bodyText();
+                return (
+                  window.webContents.getURL().startsWith("t3code://app/") &&
+                  !text.includes("Make sure it is running, then try again")
+                );
+              },
+              60_000,
+            );
+            console.log(
+              JSON.stringify({
+                phase: "offline-settings-escape",
+                bundled: true,
+                offlinePage: false,
+              }),
+            );
+
+            server = startServer(baseDir, httpPort, binDir, studioHome);
             await waitFor(
               "server restarted for the auth check",
               () => !server.exited && server.pairingToken !== null,
@@ -629,7 +1124,7 @@ async function main() {
             serverOriginUrl = new URL(`https://localhost:${tlsPort}/`);
             serverUiPageUrl = null;
             rejected = [];
-            const bearerToken = await mintBearerToken(serverOriginUrl, server.pairingToken);
+            const bearerToken = mintToken(baseDir, studioHome, binDir);
             console.log(JSON.stringify({ phase: "bearer", length: bearerToken.length }));
             const descriptorResponse = await net.fetch(
               new URL("/.well-known/t3/environment", serverOriginUrl).toString(),
@@ -701,10 +1196,14 @@ async function main() {
     await NodeFSP.writeFile(
       NodePath.join(OUT, "INDEX.md"),
       [
-        "# W2 desktop server UI proof",
+        "# W3 desktop server UI proof",
         "",
         "| Shot | State |",
         "| --- | --- |",
+        "| 07-equal-bundled.png | Equal client and server versions keep the bundled client; both saved machines (studio and cloudbox) are connected and their projects show |",
+        "| 08-local-off-bundled.png | Local environment off, one saved connection toggled off, two connected: the stale bundled flag after Settings renders the normal bundled app, not the offline page |",
+        "| 09-newer-server-ui-mesh.png | The server UI is newer, so the desktop uses it; its new-thread cards say cloudbox is available through the mesh (studio), never 'Not connected here', and there is no connect-all prompt |",
+        "| 10-offline-settings-escape.png | A newer saved server is down; Choose another server keeps bundled=1 and opens bundled Settings, and leaving Settings stays in the bundled app instead of looping to the offline page |",
         "| 01-paired-app-shell.png | Server UI paired through the shell proxy; app shell rendered |",
         "| 02-html-preview.png | A media ticket opens a preview socket; an HTML preview iframe renders in server UI and its POST reaches the proxy with no Authorization or cookie |",
         "| 03-reconnecting.png | Chunk load failed during a server restart; a calm reconnecting overlay appears without touching the mounted app |",
@@ -717,6 +1216,7 @@ async function main() {
     console.log(JSON.stringify({ output, shots: OUT }));
   } finally {
     if (!server.exited) server.child.kill("SIGTERM");
+    if (!cloudboxServer.exited) cloudboxServer.child.kill("SIGTERM");
     window.destroy();
     await new Promise((resolve) => proxy.close(resolve));
   }

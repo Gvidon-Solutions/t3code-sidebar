@@ -97,6 +97,7 @@ import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
 import {
   meshMachineOfflineText,
   offlineMeshEnvironmentIds,
+  reachableMeshEnvironmentIds,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import {
   useClientSettings,
@@ -367,6 +368,9 @@ export default function WorkspaceSidebar() {
     .map((environment) => environment.environmentId);
   // The mesh knows a machine is offline before this client's own socket notices.
   const offlineEnvironmentIds = offlineMeshEnvironmentIds(meshMachineRows);
+  // A machine the mesh reaches through a peer is not dimmed just because this client
+  // has no saved connection to it.
+  const reachableEnvironmentIds = reachableMeshEnvironmentIds(meshMachineRows);
   const offlineDescriptionFor = (environmentId: string): string | null => {
     const machine = meshMachineRows.find((row) => row.environmentId === environmentId);
     if (machine === undefined) return null;
@@ -1708,6 +1712,7 @@ export default function WorkspaceSidebar() {
                     : folder.group.memberProjects.map((member) => member.environmentId),
                   knownEnvironmentIds: connectedEnvironmentIds,
                   offlineEnvironmentIds,
+                  reachableEnvironmentIds,
                   isScratch: folder.isScratch,
                 },
                 liveReplicaStatuses,

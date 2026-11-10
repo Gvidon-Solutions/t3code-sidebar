@@ -31,6 +31,8 @@ export function projectMachineStrip(
     readonly knownEnvironmentIds: ReadonlyArray<string>;
     /** Machines the mesh reports offline, even if this client has not noticed yet. */
     readonly offlineEnvironmentIds?: ReadonlyArray<string>;
+    /** Machines the mesh reaches for this client, even without a saved connection. */
+    readonly reachableEnvironmentIds?: ReadonlyArray<string>;
     readonly isScratch?: boolean;
   },
   liveStatuses: ReadonlyArray<ReplicaLiveStatus>,
@@ -39,6 +41,9 @@ export function projectMachineStrip(
 ): ProjectMachineStripModel {
   const reps = group.isScratch ? [] : (config.projectMounts[group.projectKey] ?? []);
   const connectedHere = new Set(group.knownEnvironmentIds);
+  const reachableHere = new Set(group.reachableEnvironmentIds ?? []);
+  const availableHere = (environmentId: string) =>
+    connectedHere.has(environmentId) || reachableHere.has(environmentId);
   const offlineHere = new Set(group.offlineEnvironmentIds ?? []);
   const known = new Set([
     ...group.knownEnvironmentIds,
@@ -91,7 +96,7 @@ export function projectMachineStrip(
                       ? "grey"
                       : "neutral",
             pending: state === "pending" || state === "mounting",
-            muted: offline || !connectedHere.has(rep.environmentId),
+            muted: offline || !availableHere(rep.environmentId),
             description:
               (rep.role === "primary"
                 ? `Primary on ${machine.label}`
@@ -100,7 +105,7 @@ export function projectMachineStrip(
                 ? offlineDescriptionOf?.(rep.environmentId)
                   ? ` · ${offlineDescriptionOf(rep.environmentId)}`
                   : " · offline"
-                : connectedHere.has(rep.environmentId)
+                : availableHere(rep.environmentId)
                   ? ""
                   : offlineDescriptionOf?.(rep.environmentId)
                     ? ` · ${offlineDescriptionOf(rep.environmentId)}`
@@ -117,14 +122,14 @@ export function projectMachineStrip(
             state: "watching",
             tone: "green",
             pending: false,
-            muted: offline || !connectedHere.has(environmentId),
+            muted: offline || !availableHere(environmentId),
             description:
               (group.isScratch ? `Scratch on ${machine.label}` : `Primary on ${machine.label}`) +
               (offline
                 ? offlineDescriptionOf?.(environmentId)
                   ? ` · ${offlineDescriptionOf(environmentId)}`
                   : " · offline"
-                : connectedHere.has(environmentId)
+                : availableHere(environmentId)
                   ? ""
                   : offlineDescriptionOf?.(environmentId)
                     ? ` · ${offlineDescriptionOf(environmentId)}`

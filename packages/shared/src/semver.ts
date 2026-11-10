@@ -138,6 +138,18 @@ export function compareSemverVersions(left: string, right: string): number {
   return 0;
 }
 
+/**
+ * True only when both versions are known semantic versions and `candidate` is
+ * strictly newer. An unknown version never counts as newer.
+ */
+export function isStrictlyNewerSemver(candidate: string, baseline: string): boolean {
+  const trimmedCandidate = candidate.trim();
+  const trimmedBaseline = baseline.trim();
+  if (trimmedCandidate.length === 0 || trimmedBaseline.length === 0) return false;
+  if (parseSemver(trimmedCandidate) === null || parseSemver(trimmedBaseline) === null) return false;
+  return compareSemverVersions(trimmedCandidate, trimmedBaseline) > 0;
+}
+
 /** Keep plain JavaScript: SSH startup stringifies this for remote Node versions without known TS support. */
 export const satisfiesSemverRange: (rawVersion: string, range: string) => boolean =
   function satisfiesSemverRange(rawVersion, range) {
