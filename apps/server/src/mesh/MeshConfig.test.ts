@@ -406,3 +406,32 @@ it.effect("rollout timing persists while forced interruption is removed on the n
     expect((yield* config.current)?.doc.t3?.version).toBe("0.1.6");
   }).pipe(Effect.provide(layer)),
 );
+
+it.effect("round trips machine tag appearance through plan, apply and the layout broadcast", () =>
+  Effect.gen(function* () {
+    const config = yield* Config.MeshConfig;
+    const mesh = yield* MeshLayoutService;
+    const input = {
+      schema: 1,
+      machines: { studio: { label: "ST" } },
+      appearance: { machineTags: { style: "outline", textColor: "neutral" } },
+    };
+    const planned = yield* config.plan(input);
+    expect(planned.doc.appearance).toEqual({
+      machineTags: { style: "outline", textColor: "neutral" },
+    });
+    const revision = yield* config.apply(input, null);
+    expect(revision.doc.appearance).toEqual({
+      machineTags: { style: "outline", textColor: "neutral" },
+    });
+    expect((yield* config.current)?.doc.appearance).toEqual({
+      machineTags: { style: "outline", textColor: "neutral" },
+    });
+    expect((yield* mesh.read).config.appearance).toEqual({
+      machineTags: { style: "outline", textColor: "neutral" },
+    });
+    yield* config.apply({ schema: 1, machines: { studio: { label: "ST" } } }, revision.revision);
+    expect((yield* config.current)?.doc.appearance).toBeUndefined();
+    expect((yield* mesh.read).config.appearance).toBeUndefined();
+  }).pipe(Effect.scoped, Effect.provide(layer)),
+);

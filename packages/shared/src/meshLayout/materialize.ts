@@ -185,8 +185,19 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     const entry = doc[key];
     return entry && validateLayoutEntry(key, entry) === null ? entry.v : null;
   };
+  const machineTags = desired?.appearance?.machineTags;
   return {
     ...(writers.length ? { meshWriters: writers } : {}),
+    ...(machineTags
+      ? {
+          appearance: {
+            machineTags: {
+              ...(machineTags.style !== undefined ? { style: machineTags.style } : {}),
+              ...(machineTags.textColor !== undefined ? { textColor: machineTags.textColor } : {}),
+            },
+          },
+        }
+      : {}),
     workspaces: workspaces.map(({ sort: _sort, ...w }) => w),
     rules: rules.map(({ sort: _sort, id: _id, ...r }) => r),
     assignments,
