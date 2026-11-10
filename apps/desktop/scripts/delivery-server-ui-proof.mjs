@@ -706,7 +706,7 @@ async function main() {
         "| Shot | State |",
         "| --- | --- |",
         "| 01-paired-app-shell.png | Server UI paired through the shell proxy; app shell rendered |",
-        "| 02-html-preview.png | A media ticket minted through the proxy opens a preview socket and an HTML page served by the machine renders in server UI |",
+        "| 02-html-preview.png | A media ticket opens a preview socket; an HTML preview iframe renders in server UI and its POST reaches the proxy with no Authorization or cookie |",
         "| 03-reconnecting.png | Chunk load failed during a server restart; a calm reconnecting overlay appears without touching the mounted app |",
         "| 04-recovered-app-shell.png | Server restarted; the page reloaded and the server UI shell renders again |",
         "| 05-offline-fallback.png | Reload while the server is down falls back to the bundled client's offline page |",

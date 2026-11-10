@@ -964,4 +964,56 @@ describe("ElectronProtocol", () => {
       assert.equal(mainSubresource.get("authorization"), "Bearer owner-bearer");
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
+  it.effect("does not evict a live source for a forged server-host navigation", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(directory + "/index.html", "bundled");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        sourceSalt: "test-salt",
+        serverOrigin: async () => new URL("https://studio.example/"),
+        serverAuthorization: async () => ({ authorization: "owner-bearer", environmentId: "studio" }),
+        clerkFrontendApiHostname: undefined,
+      });
+      netFetchMock.mockImplementation(async (url: string) => {
+        if (String(url).endsWith("/api/auth/session")) return Response.json({ authenticated: true });
+        return new Response("server", {
+          headers: {
+            "content-type": "text/html",
+            "t3-desktop-ui-protocol": "1",
+            "t3-desktop-bridge": "reduced-1",
+          },
+        });
+      });
+      const redirect = yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1")),
+      );
+      const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() => handler!(navigation(pageUrl, { headers: { accept: "text/html" } })));
+      const forged = yield* Effect.promise(() =>
+        handler!(navigation(`t3code://server-1-${"f".repeat(24)}/`)),
+      );
+      assert.equal(forged.status, 404);
+      const token = yield* protocol.serverUiRequestTokenFor(new URL(pageUrl).host);
+      assert.ok(token);
+      const live = yield* Effect.promise(() =>
+        handler!(
+          new Request(new URL("api/thing", pageUrl), {
+            headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": token },
+          }),
+        ),
+      );
+      assert.equal(live.status, 200);
+      const forwarded = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
+      assert.equal(forwarded.get("authorization"), "Bearer owner-bearer");
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
+
 });
