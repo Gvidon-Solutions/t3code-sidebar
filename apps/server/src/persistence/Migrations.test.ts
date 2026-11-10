@@ -354,6 +354,39 @@ describe("runMigrations", () => {
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
+  it.effect("rolls back the reconcile when a ledger assertion refuses", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 79 });
+      yield* sql`CREATE TABLE effect_sql_fork_migrations (
+        migration_id INTEGER PRIMARY KEY NOT NULL,
+        created_at datetime NOT NULL DEFAULT current_timestamp,
+        name VARCHAR(255) NOT NULL
+      )`;
+      yield* sql`
+        INSERT INTO effect_sql_fork_migrations (migration_id, name)
+        VALUES (1005, 'FutureForkMigration')
+      `;
+      yield* sql`
+        INSERT INTO effect_sql_migrations (migration_id, name) VALUES (80, 'MeshLayout')
+      `;
+
+      const exit = yield* Effect.exit(runMigrations());
+
+      assert.isTrue(Exit.isFailure(exit));
+      assert.include(String(exit), "1005_FutureForkMigration (unknown to this build)");
+      // The refusal must not leave the moved legacy row behind in the fork ledger.
+      assert.deepStrictEqual(
+        yield* sql`SELECT migration_id, name FROM effect_sql_migrations WHERE migration_id >= 80`,
+        [{ migration_id: 80, name: "MeshLayout" }],
+      );
+      assert.deepStrictEqual(
+        yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations ORDER BY migration_id`,
+        [{ migration_id: 1005, name: "FutureForkMigration" }],
+      );
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect("refuses to open a database written by a newer fork build", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
