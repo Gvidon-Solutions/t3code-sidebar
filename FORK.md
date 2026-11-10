@@ -109,6 +109,36 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-10 — Desktop keeps the built-in client unless the server UI is newer
+
+- **What.** The desktop no longer replaces its bundled client with the server's own UI just
+  because it has a local credential. Server UI is loaded only when that server's version is
+  strictly newer than the shell's app version; equal, older and unknown versions keep the bundled
+  client and its saved connections. The choice is re-evaluated on every launch and whenever a
+  connected server reports a new version. A disabled saved connection, an unknown environment,
+  or the local backend while it is off can never become the UI source: the selection resolves to
+  the bundled client instead of the offline page. The offline page now appears only for a known
+  direct server that did not answer, always names it (configured name, host name or address), and
+  "Choose another server" drops the fallback flags so leaving Settings cannot loop back into it.
+  Server UI still shows the rest of the mesh: new-thread cards and sidebar tags use mesh
+  reachability, so a machine the mesh reaches says "Available through <machine>" instead of "Not
+  connected here", and the reduced client does not offer the connect-all prompt it cannot act on.
+- **How.** `resolveServerUiSource` and the shell's `DesktopUi` compare
+  `isStrictlyNewerSemver(serverVersion, environment.appVersion)`; `environmentCanServeUi` keeps
+  disabled, unknown and local-off sources on the bundled path. `showsDesktopBundledFallback`
+  requires a known server, and the bundled settings URL strips the fallback query.
+  `meshMachineReachable` is the one reachability rule for cards and tags; `draftMachineCards`
+  wording and `projectMachineStrip` muting use it. `MeshConnectPrompt` returns nothing in a
+  `desktopShell` window.
+- **Where.** `apps/desktop/src/app/DesktopUi.ts`, `apps/web/src/components/desktop/{serverUiSource,
+  DesktopUiCoordinator,desktopBundledFallback}.ts(x)`, `apps/desktop/src/electron/ElectronProtocol.ts`,
+  `apps/web/src/components/chat/DraftMachineCards.tsx`,
+  `apps/web/src/components/workspaces/{WorkspaceSidebar,ProjectMachineStrip}.tsx`,
+  `apps/web/src/components/sidebar/MeshConnectPrompt.tsx`,
+  `packages/client-runtime/src/state/{meshMachines,meshLayout/draftMachineCards,
+  meshLayout/projectMachineStrip}.ts`, `packages/shared/src/semver.ts`,
+  `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/mesh/README.md`.
+
 ### 2026-11-10 — Drain ignores finished runs and repairs orphaned steps
 
 - **What.** A live update no longer waits forever for nodes left open by a run that ended weeks

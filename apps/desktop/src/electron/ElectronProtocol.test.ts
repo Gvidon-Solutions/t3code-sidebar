@@ -979,11 +979,15 @@ describe("ElectronProtocol", () => {
         assetDirectory: directory,
         sourceSalt: "test-salt",
         serverOrigin: async () => new URL("https://studio.example/"),
-        serverAuthorization: async () => ({ authorization: "owner-bearer", environmentId: "studio" }),
+        serverAuthorization: async () => ({
+          authorization: "owner-bearer",
+          environmentId: "studio",
+        }),
         clerkFrontendApiHostname: undefined,
       });
       netFetchMock.mockImplementation(async (url: string) => {
-        if (String(url).endsWith("/api/auth/session")) return Response.json({ authenticated: true });
+        if (String(url).endsWith("/api/auth/session"))
+          return Response.json({ authenticated: true });
         return new Response("server", {
           headers: {
             "content-type": "text/html",
@@ -996,7 +1000,9 @@ describe("ElectronProtocol", () => {
         handler!(navigation("t3code://app/?desktopWindowId=1")),
       );
       const pageUrl = redirect.headers.get("location")!;
-      yield* Effect.promise(() => handler!(navigation(pageUrl, { headers: { accept: "text/html" } })));
+      yield* Effect.promise(() =>
+        handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
+      );
       const forged = yield* Effect.promise(() =>
         handler!(navigation(`t3code://server-1-${"f".repeat(24)}/`)),
       );
@@ -1015,5 +1021,4 @@ describe("ElectronProtocol", () => {
       assert.equal(forwarded.get("authorization"), "Bearer owner-bearer");
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
-
 });
