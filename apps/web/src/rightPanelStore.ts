@@ -66,6 +66,20 @@ export type RightPanelSurface =
       environmentId?: string;
       workspaceRoot?: string;
       projectName?: string;
+      /** The file was read from a primary because the thread's replica does not sync it. */
+      notSynced?: boolean;
+      /** The path as the person wrote it, kept for the remap caption. */
+      rawPath?: string;
+      /** False when the file is outside the thread's project. */
+      inProject?: boolean;
+      /** The resolved path as a person should read it, for the remap caption. */
+      resolvedDisplayPath?: string;
+      /** The representation root the file lives under, for relative display. */
+      root?: string;
+      /** The thread worktree was gone and the project root was used instead. */
+      worktreeRemoved?: boolean;
+      /** The machine label for the not-synced banner, kept apart from the project name. */
+      machineLabel?: string;
     }
   | {
       id: `pull-request:${string}`;
@@ -141,6 +155,17 @@ interface RightPanelStoreState {
       readonly environmentId: string;
       readonly workspaceRoot: string;
       readonly projectName: string;
+      readonly notSynced?: boolean;
+      readonly rawPath?: string;
+      readonly machineLabel?: string;
+    },
+    details?: {
+      readonly notSynced?: boolean;
+      readonly rawPath?: string;
+      readonly inProject?: boolean;
+      readonly resolvedDisplayPath?: string;
+      readonly root?: string;
+      readonly worktreeRemoved?: boolean;
     },
   ) => void;
   /** Moves in place; "" opens the root explorer. folderTrail keeps the return path; keepSource opens beside the source. */
@@ -248,6 +273,17 @@ const fileSurface = (
     readonly environmentId: string;
     readonly workspaceRoot: string;
     readonly projectName: string;
+    readonly notSynced?: boolean;
+    readonly rawPath?: string;
+    readonly machineLabel?: string;
+  },
+  details?: {
+    readonly notSynced?: boolean;
+    readonly rawPath?: string;
+    readonly inProject?: boolean;
+    readonly resolvedDisplayPath?: string;
+    readonly root?: string;
+    readonly worktreeRemoved?: boolean;
   },
 ): RightPanelSurface => ({
   id: `file:${external === undefined ? "" : `${external.environmentId}:`}${relativePath}`,
@@ -256,6 +292,7 @@ const fileSurface = (
   revealLine,
   revealRequestId,
   ...(external === undefined ? {} : external),
+  ...(details === undefined ? {} : details),
 });
 
 const attachmentSurface = (attachment: ChatFileAttachment): RightPanelSurface => ({
@@ -800,7 +837,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             ),
           }));
         }),
-      openFile: (ref, requestedPath, line, external) =>
+      openFile: (ref, requestedPath, line, external, details) =>
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) => {
             if (requestedPath === ".") {
@@ -824,6 +861,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               normalizeRevealLine(line),
               (existing?.revealRequestId ?? 0) + 1,
               external,
+              details,
             );
             return {
               ...current,

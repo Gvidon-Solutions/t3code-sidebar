@@ -65,6 +65,80 @@ const POSIX_FILE_ROOT_PREFIXES = [
   "/workspaces/",
 ] as const;
 
+const MEMBER_ONLY_EXTENSIONS = new Set([
+  "bar",
+  "baz",
+  "qux",
+  "name",
+  "path",
+  "state",
+  "map",
+  "parse",
+  "h",
+  "length",
+  "push",
+  "pop",
+  "shift",
+  "filter",
+  "reduce",
+  "forEach",
+  "toString",
+  "valueOf",
+  "then",
+  "catch",
+  "call",
+  "apply",
+  "bind",
+  "concat",
+  "slice",
+  "splice",
+  "join",
+  "split",
+  "trim",
+  "test",
+  "exec",
+  "match",
+  "replace",
+]);
+
+const CODE_OBJECT_STEMS = new Set([
+  "console",
+  "os",
+  "array",
+  "this",
+  "json",
+  "math",
+  "object",
+  "promise",
+  "process",
+  "window",
+  "document",
+]);
+
+const CODE_LIBRARY_STEMS = new Set(["Node", "Vue", "Next", "Nuxt"]);
+const CODE_RUNTIME_EXTENSIONS = new Set(["js", "mjs", "cjs"]);
+
+const isLinkableBareFileName = (basename: string): boolean => {
+  if (EXTENSIONLESS_FILE_NAMES.has(basename)) return true;
+  // Dotfiles have no stem before the dot: `.env`, `.gitignore`, `.env.local`.
+  if (/^\.[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(basename)) return true;
+  if (basename.endsWith(".")) return false;
+  const dot = basename.lastIndexOf(".");
+  if (dot <= 0 || dot === basename.length - 1) return false;
+  const stem = basename.slice(0, dot);
+  const extension = basename.slice(dot + 1).toLowerCase();
+  if (CODE_LIBRARY_STEMS.has(stem) && CODE_RUNTIME_EXTENSIONS.has(extension)) return false;
+  if (
+    CODE_OBJECT_STEMS.has(stem.toLowerCase()) &&
+    (extension === "log" || MEMBER_ONLY_EXTENSIONS.has(extension))
+  ) {
+    return false;
+  }
+  // `foo.bar`, `user.name`, `os.path`: a lowercase identifier followed by a property name.
+  if (MEMBER_ONLY_EXTENSIONS.has(extension) && /^[a-z][a-z0-9_$]*$/.test(stem)) return false;
+  return true;
+};
+
 const EXTENSIONLESS_FILE_NAMES = new Set([
   "Makefile",
   "makefile",
@@ -177,7 +251,14 @@ export function inlineCodeFilePathCandidate(codeText: string): string | null {
 
   const candidate = isWindowsAbsolutePath(trimmed) ? trimmed : trimmed.replaceAll("\\", "/");
   const hasPosition = POSITION_SUFFIX_PATTERN.test(candidate);
-  if (!hasPosition && !PATH_SEPARATOR_PATTERN.test(candidate)) return null;
+  if (!hasPosition && !PATH_SEPARATOR_PATTERN.test(candidate)) {
+    const bare = candidate.replace(/[/\\]+$/, "");
+    const basename = bare.split(/[\\/]/).at(-1) ?? bare;
+    // Bare names are linkable when they name a file, not a version, host or prose word.
+    if (!isLinkableBareFileName(basename)) {
+      return null;
+    }
+  }
 
   const hasExplicitPathShape =
     RELATIVE_PATH_PREFIX_PATTERN.test(candidate) ||
@@ -196,7 +277,13 @@ export function inlineCodeFilePathCandidate(codeText: string): string | null {
         .split(/[\\/]/)
         .at(-1) ?? "";
     if (VERSION_SUFFIX_PATTERN.test(basename)) return null;
-    if (!hasPosition && !FILE_EXTENSION_PATTERN.test(basename)) return null;
+    if (
+      !hasPosition &&
+      !FILE_EXTENSION_PATTERN.test(basename) &&
+      !EXTENSIONLESS_FILE_NAMES.has(basename)
+    ) {
+      return null;
+    }
   }
   return candidate;
 }

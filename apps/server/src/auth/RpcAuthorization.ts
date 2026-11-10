@@ -177,6 +177,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectsWriteFile]: AuthFilesystemWriteScope,
   [WS_METHODS.filesRead]: AuthFilesystemReadScope,
   [WS_METHODS.filesList]: AuthFilesystemReadScope,
+  [WS_METHODS.filesLocate]: AuthFilesystemReadScope,
+  [WS_METHODS.filesStat]: AuthFilesystemReadScope,
+  [WS_METHODS.filesReadBytes]: AuthFilesystemReadScope,
   [WS_METHODS.projectsEnsureScratch]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsCreateNew]: AuthOrchestrationOperateScope,
   [WS_METHODS.shellOpenInEditor]: AuthOrchestrationOperateScope,
@@ -288,6 +291,7 @@ const requiredScopesForRpcCall = (
     return [
       resource._tag === "workspace-file" ||
       resource._tag === "media-file" ||
+      resource._tag === "peer-file" ||
       resource._tag === "draft-workspace-file"
         ? AuthFilesystemReadScope
         : AuthOrchestrationReadScope,

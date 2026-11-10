@@ -1,5 +1,6 @@
+import { parseT3FileLink } from "@t3tools/client-runtime/files";
 import { fileBasename } from "@t3tools/shared/path";
-import { fileLinkLabel } from "@t3tools/shared/fileLinks";
+import { fileLinkLabel, splitFilePathPosition } from "@t3tools/shared/fileLinks";
 import {
   inlineCodeFilePathCandidate,
   normalizeMarkdownLinkDestination,
@@ -26,6 +27,8 @@ export type MarkdownLinkPresentation =
       readonly path: string;
       readonly line?: number;
       readonly column?: number;
+      /** T3 Mesh (fork): a `t3-file:` link names the machine that holds the file. */
+      readonly environmentId?: string;
     }
   | {
       readonly kind: "link";
@@ -264,6 +267,21 @@ export function resolveMarkdownLinkPresentation(href: string): MarkdownLinkPrese
       };
     }
   } catch {}
+
+  const machineLink = parseT3FileLink(normalized);
+  if (machineLink !== null) {
+    const { path, line, column } = splitFilePathPosition(machineLink.absolutePath);
+    return {
+      kind: "file",
+      href: normalized,
+      icon: resolveMarkdownFileIcon(path),
+      label: fileLinkLabel({ path, ...(line === undefined ? {} : { line }) }, new Map()),
+      path,
+      environmentId: machineLink.environmentId,
+      ...(line === undefined ? {} : { line }),
+      ...(column === undefined ? {} : { column }),
+    };
+  }
 
   const target = parseMarkdownFileLink(normalized);
   if (target) {

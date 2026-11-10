@@ -3,8 +3,12 @@ import {
   FilesFailure,
   FilesListResult,
   type FilesListInput,
+  type FilesReadBytesInput,
+  FilesReadBytesResult,
   type FilesReadInput,
   FilesReadResult,
+  type FilesStatInput,
+  FilesStatResult,
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -22,6 +26,8 @@ import * as FilesService from "./FilesService.ts";
 /** The tool a peer exposes for a forwarded read; only this server calls it. */
 export const FILES_READ_TOOL = "t3_files_read";
 export const FILES_LIST_TOOL = "t3_files_list";
+export const FILES_STAT_TOOL = "t3_files_stat";
+export const FILES_READ_BYTES_TOOL = "t3_files_read_bytes";
 
 /**
  * T3 Mesh (fork): reads and lists files on the machine named by the caller.
@@ -33,6 +39,10 @@ export class FilesRpc extends Context.Service<
   {
     readonly read: (input: FilesReadInput) => Effect.Effect<FilesReadResult, FilesError>;
     readonly list: (input: FilesListInput) => Effect.Effect<FilesListResult, FilesError>;
+    readonly stat: (input: FilesStatInput) => Effect.Effect<FilesStatResult, FilesError>;
+    readonly readBytes: (
+      input: FilesReadBytesInput,
+    ) => Effect.Effect<FilesReadBytesResult, FilesError>;
   }
 >()("t3/files/FilesRpc") {}
 
@@ -105,7 +115,51 @@ const make = Effect.gen(function* () {
     ).pipe(Effect.mapError((error) => asFilesError(error, partialPath)));
   });
 
-  return FilesRpc.of({ read, list });
+  const stat: FilesRpc["Service"]["stat"] = Effect.fn("FilesRpc.stat")(function* (input) {
+    if (input.environmentId === undefined) {
+      return yield* files.stat(input);
+    }
+    const descriptor = yield* environment.getDescriptor;
+    if (descriptor.environmentId === input.environmentId) {
+      return yield* files.stat(input);
+    }
+    const { environmentId, absolutePath } = input;
+    return yield* callRouted(
+      { links, peers, self: descriptor.environmentId },
+      {
+        environmentId,
+        tool: FILES_STAT_TOOL,
+        arguments: { absolutePath },
+        limits: clientLimits,
+        success: FilesStatResult,
+      },
+    ).pipe(Effect.mapError((error) => asFilesError(error, absolutePath)));
+  });
+
+  const readBytes: FilesRpc["Service"]["readBytes"] = Effect.fn("FilesRpc.readBytes")(
+    function* (input) {
+      if (input.environmentId === undefined) {
+        return yield* files.readBytes(input);
+      }
+      const descriptor = yield* environment.getDescriptor;
+      if (descriptor.environmentId === input.environmentId) {
+        return yield* files.readBytes(input);
+      }
+      const { environmentId, absolutePath, offset, length } = input;
+      return yield* callRouted(
+        { links, peers, self: descriptor.environmentId },
+        {
+          environmentId,
+          tool: FILES_READ_BYTES_TOOL,
+          arguments: { absolutePath, offset, length },
+          limits: clientLimits,
+          success: FilesReadBytesResult,
+        },
+      ).pipe(Effect.mapError((error) => asFilesError(error, absolutePath)));
+    },
+  );
+
+  return FilesRpc.of({ read, list, stat, readBytes });
 });
 
 export const layer = Layer.effect(FilesRpc, make);

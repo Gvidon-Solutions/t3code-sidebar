@@ -134,6 +134,7 @@ export function meshInstructions(
     `Mesh machines: ${machines.join(", ") || "none configured"}.`,
     "Read ~/.agents/skills/t3/SKILL.md before operating the mesh.",
     "Projects have primary and replica representations. In a lite replica, run builds, tests, git and dependency tools with t3 run -- <command>; the environment stays on the primary.",
+    "Link files as absolute paths (`/abs/path/file.ts:LINE`); use `t3-file:` links for files on another machine. Run `t3ctl locate <path>` or the `t3_files_locate` tool to check a path before writing it.",
     ...(doc.agents?.instructions ? [doc.agents.instructions] : []),
   ].join("\n\n");
 }

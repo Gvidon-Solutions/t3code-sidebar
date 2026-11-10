@@ -16,6 +16,8 @@ import { Alert } from "react-native";
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { fileRoutePathSegments } from "../files/filePath";
+import { showFileLocateSheet } from "../files/locateFileSheetState";
+import { resolvedFileTabParams } from "../../lib/threadFileTab";
 import { useSidebarWorkspaces } from "../workspaces/useSidebarWorkspaces";
 import { voiceMode } from "./voiceMode";
 import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
@@ -153,6 +155,42 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
           return;
         }
         case "file": {
+          if (target.resolved !== undefined) {
+            const resolved = target.resolved;
+            if (resolved.status === "found" && resolved.target !== undefined) {
+              navigation.navigate(
+                "ThreadFile",
+                resolvedFileTabParams(environmentId, request.threadId, {
+                  ...resolved.target,
+                  rawPath: target.path,
+                  ...(resolved.projectTitle === undefined
+                    ? {}
+                    : { projectTitle: resolved.projectTitle }),
+                }),
+              );
+            } else {
+              showFileLocateSheet({
+                rawPath: target.path,
+                result: resolved,
+                openTarget: (choice) =>
+                  navigation.navigate(
+                    "ThreadFile",
+                    resolvedFileTabParams(environmentId, request.threadId, {
+                      ...choice,
+                      ...(resolved.projectTitle === undefined
+                        ? {}
+                        : { projectTitle: resolved.projectTitle }),
+                    }),
+                  ),
+                search: () =>
+                  navigation.navigate("ThreadFiles", {
+                    environmentId,
+                    threadId: request.threadId,
+                  }),
+              });
+            }
+            return;
+          }
           const otherMachine = targetEnvironmentId !== environmentId;
           const label =
             environments.find((candidate) => candidate.environmentId === targetEnvironmentId)
@@ -187,7 +225,10 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
       });
       if (decision === "ignore") return;
       const targetEnvironmentId = uiTargetEnvironmentId(request.target, environmentId);
-      if (request.target.kind === "thread" || request.target.kind === "file") {
+      if (
+        request.target.kind === "thread" ||
+        (request.target.kind === "file" && request.target.resolved === undefined)
+      ) {
         const target = environments.find(
           (candidate) => candidate.environmentId === targetEnvironmentId,
         );

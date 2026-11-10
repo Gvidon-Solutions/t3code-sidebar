@@ -2,12 +2,16 @@ import { OrchestratorMcpFailure, ThreadId } from "@t3tools/contracts";
 import { discoverThreadMachines, probeThread } from "../../../mesh/MeshThreadAccess.ts";
 import * as Effect from "effect/Effect";
 
+import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
+import { FileLocator } from "../../../files/FileLocator.ts";
+import { locateContextFor } from "../../../files/locateContext.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as VoiceSessionService from "../../../orchestration-v2/VoiceSessionService.ts";
 import * as UiRequests from "../../../uiRequests/UiRequests.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { unavailable } from "../../threadAccess.ts";
+import { uiFileTarget } from "./fileTarget.ts";
 import { UiToolkit } from "./tools.ts";
 
 /** The calling thread, which must hold a live voice conversation. */
@@ -68,6 +72,27 @@ export const layer = McpToolAccess.toLayer(UiToolkit, {
             }
             yield* Effect.logDebug("UI thread location probe failed", found.failure);
           }
+      }
+      if (resolved.kind === "file") {
+        const environment = yield* ServerEnvironment.ServerEnvironment;
+        const descriptor = yield* environment.getDescriptor;
+        const locator = yield* FileLocator;
+        const locate = yield* locator.locate(
+          {
+            rawPath: resolved.path,
+            threadId: thread.threadId,
+            ...(resolved.environmentId === undefined
+              ? {}
+              : { environmentId: resolved.environmentId }),
+          },
+          yield* locateContextFor({
+            environmentId: descriptor.environmentId,
+            threadId: thread.threadId,
+          }),
+        );
+        const target = uiFileTarget(locate, resolved.path, descriptor.environmentId);
+        const clients = yield* uiRequests.open({ threadId: thread.threadId, target });
+        return { clients, locate };
       }
       const clients = yield* uiRequests.open({ threadId: thread.threadId, target: resolved });
       return { clients };

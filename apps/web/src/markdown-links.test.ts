@@ -79,12 +79,14 @@ describe("relative links inside a rendered host file", () => {
 });
 
 describe("resolveInlineCodeFileLinkMeta", () => {
-  it("links bare filenames only when a line suffix marks them as file references", () => {
+  it("links bare filenames and line suffixes as file references", () => {
     expect(resolveInlineCodeFileLinkMeta("script.ts:10", "/Users/julius/project")).toMatchObject({
       targetPath: "/Users/julius/project/script.ts:10",
       line: 10,
     });
-    expect(resolveInlineCodeFileLinkMeta("AGENTS.md", "/Users/julius/project")).toBeNull();
+    expect(resolveInlineCodeFileLinkMeta("AGENTS.md", "/Users/julius/project")).toMatchObject({
+      targetPath: "/Users/julius/project/AGENTS.md",
+    });
   });
 
   it("does not treat arbitrary name:digits shapes as files", () => {

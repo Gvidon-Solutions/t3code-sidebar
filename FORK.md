@@ -168,6 +168,59 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `apps/mobile/src/features/workspaces/{useWorkspaceHome.ts,workspaceNavigator.ts}`,
   `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/mesh/README.md`.
 
+### 2026-11-10 — Every file opens as a thread tab
+
+- **What.** Every resolver outcome now opens the thread's file tab, keeping the tab strip:
+  same machine, another machine, a picker choice, a `t3-file:` link, a file outside the
+  project and a removed worktree. The tab keeps the resolved (environmentId, absolutePath),
+  the machine tag and the "Not synced · from X" / "Worktree removed" / "Outside project"
+  notes inside its content. A full-screen viewer remains only when no thread is open.
+  Android's picker and not-found sheets wrap the path on its own line, use the theme's
+  secondary text colour, show relative times, machine tags and a preselected best match.
+  The desktop-files branch is merged in (desktop server UI, one configurable machine tag, drain fix);
+  `FileMachineTag` draws the shared mobile `MachineTag`.
+- **How.** `ThreadTabFile` rides the pager tab (resolved across restart), `ThreadFileScreen`
+  maps a resolver route to that tab, and `ThreadRouteScreen` renders the embedded viewer on
+  the file's machine with its own root. `threadFileTab` is the tested mapping for every
+  outcome. The sheets use a solid card, separate text lines and shared machine tags.
+- **Where.** mobile `lib/{threadTabs,threadFileTab}.ts`,
+  `features/panels/ThreadPager.tsx`, `features/tabs/{useThreadTabs,ThreadTabStrip}.ts(x)`,
+  `features/threads/{ThreadFeed,ThreadRouteScreen}.tsx`,
+  `features/files/{ThreadFilesRouteScreen,FileLocateSheet,locateFileSheetState}.tsx|ts`,
+  `features/workspaces/FileMachineTag.tsx`; `FORK.md`, `docs/mesh/README.md`.
+
+### 2026-11-09 — Any file opens from anywhere
+
+- **What.** A file link, inline code path, `ui_open`, `t3ctl open-file` or Files row resolves on
+  the server instead of being glued to the thread's working directory: the thread's worktree
+  first, then its project root, a path suffix, a basename, the same path on the primary or
+  another representation, and finally the same absolute path on another connected machine. One
+  hit opens it (with a machine tag and a remap caption); several ask; none says one plain
+  sentence with Search in project and Open folder. A file the replica does not sync is read
+  transparently from the primary, including PDFs and media through a ranged proxy. Mobile now
+  opens `t3-file:` links in chat, and its error state no longer prints raw server messages.
+  `ui_open` and `t3ctl open-file` return the resolver outcome. `t3_files_locate` and
+  `t3ctl locate` let an agent check a path, and the managed mesh instruction tells agents to
+  link absolute paths.
+- **How.** `files.locate` (contracts + `apps/server/src/files/FileLocator.ts`) runs the tiers
+  with per-tier timeouts and `git ls-files`/narrow-walk suffix lookup, ranks by thread-touched,
+  in-worktree, mtime and path length, and never auto-picks across machines or sibling
+  worktrees. `files.stat`/`files.readBytes` are forwardable peer tools. A `peer-file` asset
+  resource mints a local proxy URL; `/api/assets` fetches ranges over the peer link. Web
+  `ChatMarkdown` calls the resolver and shows `FileLocateDialogHost`; mobile `ThreadFeed` does
+  the same with `FileLocateSheet`; both viewers read text from another machine through the
+  forwardable `files.read`. Worktree removal falls back to the project root.
+- **Where.** `packages/contracts/src/{files,assets,uiRequests,rpc}.ts`;
+  `apps/server/src/files/{FileLocator,FilesService,FilesRpc,locateContext}.ts`,
+  `src/http.ts`, `src/assets/AssetAccess.ts`, `src/mcp/toolkits/{files,ui}`,
+  `src/mesh/MeshAgentKit.ts`; `packages/client-runtime/src/state/files.ts`; web
+  `components/files/{FileLocateDialogHost,locateFileState}.tsx|ts`,
+  `components/ChatMarkdown.tsx`, `components/files/FilePreviewPanel.tsx`,
+  `components/chat/RightPanelSurfaceContent.tsx`; mobile
+  `features/files/{FileLocateSheet,ThreadFilesRouteScreen,workspaceFileAssetUrl}.tsx|ts`,
+  `features/threads/ThreadFeed.tsx`, `lib/markdownLinks.ts`; `agent-kit/skills/t3/scripts/t3ctl.mjs`;
+  `docs/mesh/README.md`.
+
 ### 2026-11-10 — Drain ignores finished runs and repairs orphaned steps
 
 - **What.** A live update no longer waits forever for nodes left open by a run that ended weeks
@@ -219,6 +272,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `features/connection/{pairing,ConnectionsNewRouteScreen}.ts(x)`; contracts
   `desktopUi.ts`, `ipc.ts`; `packages/shared/src/remote.ts`;
   `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/delivery.md`,
+
   `docs/mesh/README.md`.
 
 ### 2026-11-09 — Environments screens speak mesh names

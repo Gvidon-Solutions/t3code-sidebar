@@ -162,6 +162,7 @@ vi.mock("@t3tools/client-runtime/state/runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@t3tools/client-runtime/state/runtime")>()),
   executeAtomQuery: (...args: unknown[]) => audio.query(...args),
 }));
+vi.mock("../state/files", () => ({ filesEnvironment: { locate: () => ({}) } }));
 vi.mock("../state/projects", () => ({
   projectEnvironment: {
     searchEntries: (input: unknown) => input,
@@ -506,15 +507,34 @@ describe("ThreadInlineFilePreview playback", () => {
       await act(async () =>
         finishLookup({
           _tag: "Success",
-          value: { entries: [{ path: "src/target.ts", kind: "file" }] },
+          value: {
+            status: "found",
+            environmentId,
+            target: {
+              environmentId,
+              absolutePath: "/repo/src/target.ts",
+              kind: "file",
+              via: "basename",
+              inProject: true,
+              touchedByThread: false,
+              displayPath: "src/target.ts",
+            },
+            tried: [],
+          },
         }),
       );
       if (playback === "continued playback") {
-        expect(audio.navigate).toHaveBeenCalledExactlyOnceWith("ThreadFile", {
-          environmentId,
-          threadId,
-          path: ["src", "target.ts"],
-        });
+        expect(audio.navigate).toHaveBeenCalledTimes(1);
+        expect(audio.navigate).toHaveBeenCalledWith(
+          "ThreadFile",
+          expect.objectContaining({
+            environmentId,
+            threadId,
+            fileTarget: "resolved",
+            fileEnvironmentId: environmentId,
+            resolvedPath: "/repo/src/target.ts",
+          }),
+        );
         expect(signal.aborted).toBe(false);
       } else {
         expect(audio.navigate).not.toHaveBeenCalled();

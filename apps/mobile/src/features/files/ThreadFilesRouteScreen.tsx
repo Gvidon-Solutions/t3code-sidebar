@@ -1,4 +1,6 @@
+import { useAtomValue } from "@effect/atom-react";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
+import { pickFilesEnvironment } from "@t3tools/client-runtime/files";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { resolveFilesystemReadAccess } from "@t3tools/client-runtime/state/filesystem";
 import { environmentSession } from "../../state/session";
@@ -12,6 +14,8 @@ import {
 } from "@react-navigation/native";
 import { useId, useLayoutEffect, useState } from "react";
 import { Platform, View } from "react-native";
+
+import { AppText as Text } from "../../components/ui/AppText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { EnvironmentId, type ProjectReadFileResult, ThreadId } from "@t3tools/contracts";
@@ -40,7 +44,8 @@ import { type MediaActionsSource } from "../../lib/mediaActionsSource";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useEnvironmentQuery } from "../../state/query";
-import { useEnvironmentPresentation } from "../../state/presentation";
+import { connectedEnvironmentIdsAtom, useEnvironmentPresentation } from "../../state/presentation";
+import { filesEnvironment } from "../../state/files";
 import { projectEnvironment } from "../../state/projects";
 import type { AssetUrlFailureReason } from "../../state/asset-url-state";
 import {
@@ -59,6 +64,7 @@ import { preloadWorkspaceFileContents } from "./preload-workspace-file";
 import { SourceFileSurface } from "./SourceFileSurface";
 import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { ThreadFileNavigatorPane } from "./thread-file-navigator-pane";
+import { threadFileTab } from "../../lib/threadFileTab";
 import { AppBar } from "../../components/ui/AppBar";
 import { WorkspaceFileImagePreview } from "./WorkspaceFileImagePreview";
 import { WorkspaceFilePreviewError } from "./WorkspaceFilePreviewError";
@@ -67,6 +73,9 @@ import { WorkspaceFileSvgPreview, WorkspaceFileWebPreview } from "./WorkspaceFil
 import { WorkspaceFilePdfPreview } from "./WorkspaceFilePdfPreview";
 import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
 import { FileMachineTag } from "../workspaces/FileMachineTag";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useThreadPager } from "../panels/threadPagerContext";
 import { useThreadTabPosition } from "../tabs/useThreadTabPosition";
 import {
@@ -75,6 +84,7 @@ import {
   fileRoutePathSegments,
   resolveWorkspaceFilePath,
   resolveWorkspaceRelativeFilePath,
+  isAbsolutePath,
   isAudioPreviewFile,
   isMarkdownPreviewFile,
   isSvgImagePreviewFile,
@@ -384,10 +394,19 @@ type ThreadFileRouteScreenProps = StaticScreenProps<{
   readonly environmentId: string;
   readonly sourceEnvironmentId?: string;
   readonly threadId?: string;
-  readonly path: string[];
+  readonly path: string[] | string;
   readonly line?: string;
   readonly cwd?: string;
   readonly projectName?: string;
+  readonly worktreeRemoved?: string;
+  readonly notSynced?: string;
+  readonly outsideProject?: string;
+  /** Set when the resolver chose this file; the tab keeps the resolved target. */
+  readonly fileTarget?: string;
+  readonly fileEnvironmentId?: string;
+  readonly rawPath?: string;
+  readonly displayPath?: string;
+  readonly resolvedPath?: string;
 }>;
 
 function useThreadFilesWorkspace(params: {
@@ -433,6 +452,20 @@ function FilesUnavailable({
       <NativeStackScreenOptions options={{ title: "Files" }} />
       <EmptyState title="Files unavailable" detail={detail} />
     </View>
+  );
+}
+
+function NotSyncedNotice({ environmentId }: { readonly environmentId: string }) {
+  const { config } = useMeshLayout();
+  const environments = useWorkspaceEnvironments();
+  const label =
+    environments.find((environment) => environment.environmentId === environmentId)
+      ?.environmentLabel ?? environmentId;
+  const machine = machineDisplayOf(config ?? { machines: {} }, environmentId, label);
+  return (
+    <FilePreviewNotice title={`Not synced · from ${machine.label}`}>
+      The main copy holds this file.
+    </FilePreviewNotice>
   );
 }
 
@@ -658,11 +691,14 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     if (threadBelow === null) return;
     const path = normalizeRoutePath(params.path);
     if (path === null) return;
+    const mapping = threadFileTab(params);
+    if (mapping === null) return;
     navigation.dispatch({
       ...CommonActions.setParams({
-        tab: path,
-        line: firstRouteParam(params.line) ?? undefined,
+        tab: mapping.path,
+        line: mapping.line ?? undefined,
         tabAt: Date.now(),
+        ...(mapping.tabFile === undefined ? {} : { tabFile: mapping.tabFile }),
       }),
       source: threadBelow.key,
     });
@@ -687,8 +723,19 @@ export function ThreadFileView(
   const iconColor = useUniwindTheme()["--color-icon"];
   const params = props.route.params;
   const targetLine = normalizeRouteLine(firstRouteParam(params.line));
-  const { cwd, environmentId, projectName, relativePath, selectedThread, threadId } =
-    useThreadFilesWorkspace(props.route.params);
+  const {
+    cwd,
+    environmentId: workspaceEnvironmentId,
+    projectName,
+    relativePath,
+    selectedThread,
+    threadId,
+  } = useThreadFilesWorkspace(props.route.params);
+  const fileEnvironmentId = firstRouteParam(params.fileEnvironmentId);
+  const environmentId =
+    fileEnvironmentId === null ? workspaceEnvironmentId : EnvironmentId.make(fileEnvironmentId);
+  const displayPath = firstRouteParam(params.displayPath) ?? relativePath;
+  const absolutePathParam = firstRouteParam(params.resolvedPath);
   const fileAccessSession = useEnvironmentQuery(
     environmentId !== null ? environmentSession.sessionStateAtom(environmentId) : null,
   );
@@ -701,7 +748,16 @@ export function ThreadFileView(
   });
   const { canReadFiles } = fileAccess;
   const targetPath =
-    cwd !== null && relativePath !== null ? resolveWorkspaceFilePath(cwd, relativePath) : null;
+    absolutePathParam ??
+    (cwd !== null && relativePath !== null ? resolveWorkspaceFilePath(cwd, relativePath) : null);
+  const connectedIds = useAtomValue(connectedEnvironmentIdsAtom);
+  const readThroughEnvironmentId =
+    environmentId !== null ? pickFilesEnvironment(environmentId, connectedIds) : null;
+  const remoteRead =
+    !canReadFiles &&
+    environmentId !== null &&
+    readThroughEnvironmentId !== null &&
+    targetPath !== null;
   const metadata = useEnvironmentQuery(
     canReadFiles && environmentId !== null && targetPath !== null
       ? projectEnvironment.fileMetadata({ environmentId, input: { path: targetPath } })
@@ -747,7 +803,7 @@ export function ThreadFileView(
     !metadataPending &&
     directoryPath === null &&
     (isBrowserFile || isImageFile || isVideoFile || isAudioFile)
-      ? relativePath
+      ? (absolutePathParam ?? relativePath)
       : null;
   const assetPreview = useWorkspaceFileAssetUrlState({
     cwd,
@@ -755,6 +811,9 @@ export function ThreadFileView(
     relativePath: assetPreviewPath,
     threadId,
     draftCwd: threadId === null ? cwd : null,
+    ...(remoteRead
+      ? { peerEnvironmentId: environmentId, callEnvironmentId: readThroughEnvironmentId }
+      : {}),
   });
   const assetPreviewUri = assetPreview._tag === "Success" ? assetPreview.url : null;
   const mediaSource: MediaActionsSource | undefined =
@@ -812,11 +871,28 @@ export function ThreadFileView(
       needsFileContents
       ? projectEnvironment.readFile({
           environmentId,
-          input: { cwd, relativePath },
+          input: { cwd: cwd ?? "", relativePath: absolutePathParam ?? relativePath },
         })
       : null,
   );
-  const fileData = fileQuery.data as ProjectReadFileResult | null;
+  const remoteFileQuery = useEnvironmentQuery(
+    remoteRead && readThroughEnvironmentId !== null && environmentId !== null && targetPath !== null
+      ? filesEnvironment.read({
+          environmentId: readThroughEnvironmentId,
+          input: { environmentId, absolutePath: targetPath },
+        })
+      : null,
+  );
+  const remoteProjectResult: ProjectReadFileResult | null =
+    remoteFileQuery.data === null
+      ? null
+      : {
+          relativePath: relativePath ?? targetPath ?? "",
+          contents: remoteFileQuery.data.contents,
+          byteLength: remoteFileQuery.data.byteLength,
+          truncated: remoteFileQuery.data.truncated,
+        };
+  const fileData = (fileQuery.data as ProjectReadFileResult | null) ?? remoteProjectResult;
   useWorkspaceFileRefresh({
     enabled: canReadFiles && cwd !== null && relativePath !== null && needsFileContents,
     poll:
@@ -1093,12 +1169,12 @@ export function ThreadFileView(
     );
   }
 
-  const headerSubtitle = fileHeaderSubtitle(projectName, relativePath);
+  const headerSubtitle = fileHeaderSubtitle(projectName, displayPath ?? relativePath ?? "");
 
   return (
     <View className="flex-1 bg-sheet">
       <FileHeader
-        title={basename(relativePath)}
+        title={basename(displayPath ?? relativePath)}
         subtitle={headerSubtitle}
         iconColor={iconColor}
         activeMode={resolvedActiveMode}
@@ -1113,9 +1189,30 @@ export function ThreadFileView(
           threadEnvironmentId={params.sourceEnvironmentId}
         />
       </View>
+      {firstRouteParam(params.rawPath) !== null &&
+      !isAbsolutePath(firstRouteParam(params.rawPath) ?? "") &&
+      displayPath !== null &&
+      firstRouteParam(params.rawPath) !== displayPath ? (
+        <View className="px-4 py-1">
+          <Text className="font-mono text-xs text-foreground">
+            {firstRouteParam(params.rawPath)} → {displayPath}
+          </Text>
+        </View>
+      ) : null}
+      {firstRouteParam(params.worktreeRemoved) !== null ? (
+        <FilePreviewNotice title="Worktree removed">
+          Opened from the project root.
+        </FilePreviewNotice>
+      ) : null}
+      {firstRouteParam(params.notSynced) !== null && environmentId !== null ? (
+        <NotSyncedNotice environmentId={String(environmentId)} />
+      ) : null}
+      {firstRouteParam(params.outsideProject) !== null ? (
+        <FilePreviewNotice title="Outside project">Read-only.</FilePreviewNotice>
+      ) : null}
       {threadId !== null ? (
         <ThreadTabStrip
-          environmentId={String(environmentId)}
+          environmentId={params.sourceEnvironmentId ?? String(environmentId)}
           threadId={String(threadId)}
           activePath={relativePath}
         />
@@ -1133,7 +1230,11 @@ export function ThreadFileView(
           mediaSource={mediaSource}
           resolveVideoUri={assetPreview.refresh}
           fileContents={fileData?.contents ?? null}
-          fileError={fileQuery.error}
+          fileError={
+            fileQuery.error === null && remoteFileQuery.error === null
+              ? null
+              : "This file could not be read. It may have moved or been deleted."
+          }
           initialLine={targetLine}
           relativePath={relativePath}
           threadId={threadId}

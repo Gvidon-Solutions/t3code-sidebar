@@ -3,6 +3,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
+  type EnvironmentId,
 } from "@t3tools/contracts";
 import { isDevProxiedPath } from "@t3tools/shared/devProxy";
 import { injectMcpAppCookieBootstrap, injectMcpAppThemeBootstrap } from "@t3tools/shared/mcpApp";
@@ -30,6 +31,15 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { OtlpTracer, OtlpSerialization } from "effect/observability";
 
 import * as ServerConfig from "./config.ts";
+import * as FilesRpc from "./files/FilesRpc.ts";
+import {
+  planRemoteResponse,
+  readRemoteChunk,
+  releaseProxySlot,
+  remoteChunkStream,
+  REMOTE_FILE_CHUNK_BYTES,
+  tryAcquireProxySlot,
+} from "./files/PeerFileStream.ts";
 import { ASSET_ROUTE_PREFIX, readMcpAppHtml, resolveAsset } from "./assets/AssetAccess.ts";
 import { sourceControlMediaResponse } from "./assets/sourceControlMediaResponse.ts";
 import { statMediaFile, streamMediaFile, type OpenMediaFile } from "./assets/MediaFile.ts";
@@ -250,6 +260,91 @@ export const assetFileResponse = Effect.fn("assetFileResponse")(function* (
   return yield* HttpServerResponse.file(asset.path, { status, offset, bytesToRead, headers });
 });
 
+/**
+ * A preview of a file the client's server does not hold. Ranges are fetched from
+ * the machine that does over the peer link, in bounded streamed chunks, so a
+ * phone connected to one machine can show a PDF that only the primary has.
+ */
+const remoteFileResponse = Effect.fn("http.remoteFileResponse")(function* (
+  asset: {
+    readonly environmentId: string;
+    readonly filePath: string;
+    readonly fileName: string;
+    readonly mimeType: string;
+    readonly download?: boolean;
+  },
+  rangeHeader?: string,
+  ifRangeHeader?: string,
+  method: "GET" | "HEAD" = "GET",
+) {
+  if (!tryAcquireProxySlot()) {
+    return HttpServerResponse.text("Too many file previews at once.", { status: 503 });
+  }
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    releaseProxySlot();
+  };
+  return yield* Effect.gen(function* () {
+    const filesRpc = yield* FilesRpc.FilesRpc;
+    const environmentId = asset.environmentId as EnvironmentId;
+    const stat = yield* filesRpc.stat({ environmentId, absolutePath: asset.filePath });
+    let size = stat.byteLength ?? 0;
+    let plan = planRemoteResponse({ rangeHeader, ifRangeHeader, size });
+    if (plan.status === 416) {
+      release();
+      return HttpServerResponse.empty({
+        status: 416,
+        headers: { "Content-Range": `bytes */${size}` },
+      });
+    }
+    const headers = assetResponseHeaders(asset.fileName, asset);
+    headers["Accept-Ranges"] = "bytes";
+    let firstBytes: Uint8Array | undefined;
+    if (method === "GET" && plan.length > 0) {
+      const first = yield* readRemoteChunk({
+        filesRpc,
+        environmentId,
+        absolutePath: asset.filePath,
+        offset: plan.offset,
+        length: Math.min(REMOTE_FILE_CHUNK_BYTES, plan.length),
+      });
+      if (first.totalBytes !== size) {
+        size = first.totalBytes;
+        plan = planRemoteResponse({ rangeHeader, ifRangeHeader, size });
+        if (plan.status === 416) {
+          release();
+          return HttpServerResponse.empty({
+            status: 416,
+            headers: { "Content-Range": `bytes */${size}` },
+          });
+        }
+      }
+      firstBytes =
+        first.bytes.byteLength <= plan.length ? first.bytes : first.bytes.subarray(0, plan.length);
+    }
+    headers["Content-Length"] = String(plan.length);
+    if (plan.status === 206 && plan.contentRange !== undefined) {
+      headers["Content-Range"] = plan.contentRange;
+    }
+    if (method === "HEAD" || plan.length === 0) {
+      release();
+      return HttpServerResponse.empty({ status: plan.status, headers });
+    }
+    const body = remoteChunkStream({
+      filesRpc,
+      environmentId,
+      absolutePath: asset.filePath,
+      offset: plan.offset,
+      length: plan.length,
+      totalBytes: size,
+      ...(firstBytes === undefined ? {} : { firstBytes }),
+    }).pipe(Stream.ensuring(Effect.sync(release)));
+    return HttpServerResponse.stream(body, { status: plan.status, headers });
+  }).pipe(Effect.onError(() => Effect.sync(release)));
+});
+
 export const layerHttpCompression = HttpRouter.middleware(HttpMiddleware.compression(), {
   global: true,
 });
@@ -431,6 +526,18 @@ export const layerAssetRoute = HttpRouter.add(
         contentType: asset.mimeType,
         headers: { "cache-control": "private, max-age=3600", "x-content-type-options": "nosniff" },
       });
+    }
+    if (asset.kind === "remote-file") {
+      return yield* remoteFileResponse(
+        asset,
+        request.method === "GET" ? request.headers.range : undefined,
+        request.headers["if-range"],
+        request.method === "HEAD" ? "HEAD" : "GET",
+      ).pipe(
+        Effect.orElseSucceed(() =>
+          HttpServerResponse.text("The file could not be read from its machine.", { status: 502 }),
+        ),
+      );
     }
     if (asset.kind === "source-control-media") {
       return yield* sourceControlMediaResponse(asset, request.headers).pipe(

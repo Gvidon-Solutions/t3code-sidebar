@@ -488,6 +488,7 @@ describe("large text preview recovery", () => {
         <WorkspaceLargeTextPreview
           key={key}
           environmentId={EnvironmentId.make("test")}
+          callEnvironmentId={EnvironmentId.make("test")}
           threadRef={{ environmentId: EnvironmentId.make("test"), threadId: ThreadId.make("test") }}
           absolutePath="/repo/large.txt"
           name="large.txt"

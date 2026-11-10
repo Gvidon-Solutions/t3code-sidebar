@@ -178,6 +178,16 @@ const AssetClaimsSchema = Schema.Union([
     cwd: Schema.String,
     expiresAt: Schema.Number,
   }),
+  Schema.Struct({
+    version: Schema.Literal(1),
+    kind: Schema.Literal("peer-file"),
+    environmentId: Schema.String,
+    filePath: Schema.String,
+    fileName: Schema.String,
+    mimeType: Schema.String,
+    download: Schema.optionalKey(Schema.Boolean),
+    expiresAt: Schema.Number,
+  }),
 ]);
 type AssetClaims = typeof AssetClaimsSchema.Type;
 
@@ -205,6 +215,14 @@ export type ResolvedAsset =
       readonly url: string;
       readonly cwd: string;
       readonly expiresAt: number;
+    }
+  | {
+      readonly kind: "remote-file";
+      readonly environmentId: string;
+      readonly filePath: string;
+      readonly fileName: string;
+      readonly mimeType: string;
+      readonly download?: boolean;
     };
 
 function decodeClaims(encodedPayload: string): AssetClaims | null {
@@ -840,6 +858,25 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       fileName = "native-app-icon.png";
       break;
     }
+    case "peer-file": {
+      fileName = path.basename(input.resource.path);
+      const mimeType =
+        input.resource.disposition === "attachment"
+          ? "application/octet-stream"
+          : (hostPreviewMimeTypeFromExtension(path.extname(fileName)) ??
+            "application/octet-stream");
+      claims = {
+        version: 1,
+        kind: "peer-file",
+        environmentId: input.resource.environmentId,
+        filePath: input.resource.path,
+        fileName,
+        mimeType,
+        ...(input.resource.disposition === "attachment" ? { download: true } : {}),
+        expiresAt,
+      };
+      break;
+    }
     case SOURCE_CONTROL_MEDIA_ASSET: {
       const media = sourceControlDefinitions.mediaUrl(input.resource.url);
       if (media === null) {
@@ -990,6 +1027,17 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
     const nativeAppIconResolver = yield* NativeAppIconResolver.NativeAppIconResolver;
     const iconPath = yield* nativeAppIconResolver.resolve(claims.app);
     return iconPath ? ({ kind: "file", path: iconPath } satisfies ResolvedAsset) : null;
+  }
+
+  if (claims.kind === "peer-file") {
+    return {
+      kind: "remote-file",
+      environmentId: claims.environmentId,
+      filePath: claims.filePath,
+      fileName: claims.fileName,
+      mimeType: claims.mimeType,
+      ...(claims.download ? { download: true } : {}),
+    } satisfies ResolvedAsset;
   }
 
   const decodedPath = decodeRelativePath(relativePath);

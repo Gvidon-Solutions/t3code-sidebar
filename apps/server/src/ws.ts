@@ -100,6 +100,7 @@ import {
   type ServerProvider,
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
+  AssetPeerFileAccessError,
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
   SOURCE_CONTROL_MEDIA_ASSET,
@@ -220,6 +221,11 @@ import {
 import { parseBase64DataUrl } from "./imageMime.ts";
 import { deletePendingAttachment, issueAttachmentUploadUrl } from "./assets/AttachmentUpload.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
+import * as FileLocator from "./files/FileLocator.ts";
+import { peerFilePathAllowed, peerTargetAllowed } from "./files/PeerFileAccess.ts";
+import { McpInvocationContext } from "./mcp/McpInvocationContext.ts";
+import { linkPermissions } from "./mesh/MeshLinkPermissions.ts";
+import { locateContextFor } from "./files/locateContext.ts";
 import * as FilesRpc from "./files/FilesRpc.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as KnownWorkspaces from "./workspace/KnownWorkspaces.ts";
@@ -1505,6 +1511,7 @@ export const layerWsRpc = (
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
       const filesRpc = yield* FilesRpc.FilesRpc;
+      const fileLocator = yield* FileLocator.FileLocator;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
@@ -3099,6 +3106,24 @@ export const layerWsRpc = (
         [WS_METHODS.filesystemGetMetadata]: (input) => workspaceFileSystem.getMetadata(input),
         [WS_METHODS.filesRead]: (input) => filesRpc.read(input),
         [WS_METHODS.filesList]: (input) => filesRpc.list(input),
+        [WS_METHODS.filesStat]: (input) => filesRpc.stat(input),
+        [WS_METHODS.filesReadBytes]: (input) => filesRpc.readBytes(input),
+        [WS_METHODS.filesLocate]: Effect.fn("ws.filesLocate")(function* (input) {
+          const descriptor = yield* serverEnvironment.getDescriptor;
+          const context = yield* locateContextFor({
+            environmentId: descriptor.environmentId,
+            ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+            ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+          });
+          const result = yield* fileLocator.locate(input, context);
+          yield* Effect.logInfo("files.locate", {
+            status: result.status,
+            via: result.target?.via ?? null,
+            candidateCount: result.candidates?.length ?? 0,
+            tiers: result.tried.map((entry) => entry.tier),
+          });
+          return result;
+        }),
         [WS_METHODS.filesystemBrowse]: (input) =>
           workspaceEntries.browse(input).pipe(
             Effect.mapError(
@@ -3130,6 +3155,40 @@ export const layerWsRpc = (
                 !isNetworkPath(input.resource.path))
             ) {
               return yield* issueAssetUrl({ resource: input.resource });
+            }
+            if (input.resource._tag === "peer-file") {
+              const resource = input.resource;
+              const self = mesh.environmentId;
+              const snapshot = yield* mesh.read;
+              if (
+                !peerTargetAllowed(
+                  self,
+                  resource.environmentId,
+                  Object.keys(snapshot.config.machines),
+                )
+              ) {
+                return yield* new AssetPeerFileAccessError({ resource });
+              }
+              const invocation = yield* Effect.serviceOption(McpInvocationContext);
+              if (Option.isSome(invocation) && invocation.value.client?.linked === true) {
+                const permissions = yield* linkPermissions();
+                const roots = Object.values(snapshot.config.projectMounts)
+                  .flat()
+                  .filter((rep) => rep.environmentId === resource.environmentId)
+                  .map((rep) => rep.path);
+                if (
+                  !peerFilePathAllowed({
+                    linked: true,
+                    files: permissions.files,
+                    access: invocation.value.client.access,
+                    absolutePath: resource.path,
+                    projectRoots: roots,
+                  })
+                ) {
+                  return yield* new AssetPeerFileAccessError({ resource });
+                }
+              }
+              return yield* issueAssetUrl({ resource });
             }
             if (input.resource._tag === "draft-workspace-file") {
               return yield* issueAssetUrl({

@@ -9,6 +9,7 @@ import * as Schema from "effect/Schema";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
 import { EnvironmentId, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { FilesLocateResult } from "./files.ts";
 
 export const UiOpenTarget = Schema.Union([
   Schema.Struct({
@@ -31,6 +32,8 @@ export const UiOpenTarget = Schema.Union([
     path: TrimmedNonEmptyString,
     line: Schema.optional(PositiveInt),
     environmentId: Schema.optionalKey(EnvironmentId),
+    /** What the asking server's resolver found; clients show the picker/not-found or open the target. */
+    resolved: Schema.optionalKey(FilesLocateResult),
   }),
   Schema.Struct({
     kind: Schema.Literal("diff"),
@@ -54,6 +57,8 @@ export type UiOpenInput = typeof UiOpenInput.Type;
 export const UiOpenResult = Schema.Struct({
   /** Clients connected to receive it; 0 means nobody is looking. */
   clients: Schema.Int,
+  /** For a file target: what the resolver found, and where. */
+  locate: Schema.optionalKey(FilesLocateResult),
 });
 export type UiOpenResult = typeof UiOpenResult.Type;
 

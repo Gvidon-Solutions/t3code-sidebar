@@ -23,6 +23,9 @@ import { environmentSummaries } from "../../state/presentation";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { latestUiRequestsAtom, latestVoiceCommandsAtom } from "../../state/uiRequests";
 import { toastManager } from "../ui/toast";
+import { showFileLocateDialog } from "../files/FileLocateDialogHost";
+import { openLocatedFile } from "../../files/openLocatedFile";
+import { openCommandPalette } from "../../commandPaletteBus";
 import {
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
@@ -39,6 +42,30 @@ function openInPanel(
   targetEnvironmentId: EnvironmentId,
 ) {
   if (target.kind === "file") {
+    if (target.resolved !== undefined) {
+      const resolved = target.resolved;
+      if (resolved.status === "found" && resolved.target !== undefined) {
+        openLocatedFile(threadRef, {
+          ...resolved.target,
+          rawPath: target.path,
+          ...(resolved.projectTitle === undefined ? {} : { projectTitle: resolved.projectTitle }),
+        });
+      } else {
+        showFileLocateDialog(
+          target.path,
+          resolved,
+          (choice) =>
+            openLocatedFile(threadRef, {
+              ...choice,
+              ...(resolved.projectTitle === undefined
+                ? {}
+                : { projectTitle: resolved.projectTitle }),
+            }),
+          (term) => openCommandPalette({ query: term }),
+        );
+      }
+      return;
+    }
     if (target.environmentId === undefined) {
       useRightPanelStore.getState().openFile(threadRef, target.path, target.line);
       return;

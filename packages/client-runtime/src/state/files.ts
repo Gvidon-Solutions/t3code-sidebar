@@ -17,5 +17,13 @@ export function createFilesAtoms<R, E>(
       label: "environment-data:files:list",
       tag: WS_METHODS.filesList,
     }),
+    stat: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:files:stat",
+      tag: WS_METHODS.filesStat,
+    }),
+    locate: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:files:locate",
+      tag: WS_METHODS.filesLocate,
+    }),
   };
 }

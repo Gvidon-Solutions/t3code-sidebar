@@ -1457,7 +1457,8 @@ async function remotePairingCode(destination, baseDir) {
 
 async function tryUiOpen(target) {
   try {
-    return { clients: (await (await mcp()).call("ui_open", { target })).clients, note: null };
+    const result = await (await mcp()).call("ui_open", { target });
+    return { clients: result.clients, locate: result.locate ?? null, note: null };
   } catch (error) {
     const message = error instanceof Fail ? error.message : String(error);
     if (
@@ -1467,6 +1468,7 @@ async function tryUiOpen(target) {
     ) {
       return {
         clients: null,
+        locate: null,
         note: "ui_open runs as the calling T3 thread, so an outside client only gets the link. Ask an agent in that thread, or open the link.",
       };
     }
@@ -1882,6 +1884,22 @@ function placeProject(cfg, key, root, ids, scratch = false) {
 }
 
 const THREAD_ORGANIZE = ["pin", "unpin", "settle", "unsettle", "archive", "unarchive", "unsnooze"];
+
+/** Human lines for the `open-file` locate outcome; H4 never reports a choice as opened. */
+export function openFileLocateLines(locate) {
+  if (!locate) return [];
+  if (locate.status === "notFound") {
+    return [`not found: tried ${locate.tried.map((entry) => entry.tier).join(", ") || "nothing"}`];
+  }
+  if (locate.status === "choose") {
+    const candidates = locate.candidates ?? [];
+    return [
+      `needs choice: ${candidates.length} matches (a picker was sent to the client)`,
+      ...candidates.map((candidate) => `  ${candidate.absolutePath}  [${candidate.environmentId}]`),
+    ];
+  }
+  return locate.target ? [`opened: ${locate.target.absolutePath} on ${locate.target.environmentId}`] : [];
+}
 
 const commands = {
   agents: async (pos, opt) => {
@@ -3164,12 +3182,37 @@ const commands = {
         line: line ?? null,
         link,
         clients: ui.clients,
+        locate: ui.locate,
         note: ui.note,
       });
     console.log(`${path}${line ? `:${line}` : ""}  [${machine.tag}] ${machine.label}`);
+    for (const line of openFileLocateLines(ui.locate)) console.log(line);
     console.log(`link:  ${link}`);
     if (ui.clients !== null) console.log(`opened on ${ui.clients} client(s)`);
     if (ui.note) console.log(ui.note);
+  },
+
+  async locate(pos, opt) {
+    if (!pos[0]) die("usage: t3ctl locate <path> [--on <machine>]");
+    const machine = opt.on ? await getMachine(opt.on) : null;
+    let path = String(pos[0]);
+    if (!path.startsWith("/") && !path.startsWith("~/")) path = resolve(process.cwd(), path);
+    const r = await withWs((c) =>
+      c.rpc("files.locate", {
+        rawPath: path,
+        ...(machine ? { environmentId: machine.environmentId } : {}),
+      }),
+    );
+    if (opt.json) return json(r);
+    if (r.status === "notFound") {
+      console.log(`not found (tried ${r.tried.map((entry) => entry.tier).join(", ")})`);
+    } else if (r.status === "choose") {
+      console.log(`${r.candidates.length} matches:`);
+      for (const candidate of r.candidates)
+        console.log(`  ${candidate.absolutePath}  [${candidate.environmentId}]`);
+    } else if (r.target) {
+      console.log(`${r.target.absolutePath}  [${r.target.environmentId}] via ${r.target.via}`);
+    }
   },
 
   async cat(pos, opt) {
@@ -4308,6 +4351,7 @@ READ
   threads --all | status --all            one overview across every linked machine
   open <T> [--on <M>]                     show a thread everywhere it is open; prints web + t3-thread links
   open-file <path> [--on <M>] [--line N]  open a file on any machine (t3-file link)
+  locate <path> [--on <M>] [--json]      resolve a path the way a tap does
   cat <path> [--on <M>]                   print a file from any machine
   wait <T> [--timeout 30m]                block until the current run finishes
   requests <T>                            pending approvals / questions

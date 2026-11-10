@@ -96,8 +96,14 @@ import {
   FilesError,
   FilesListInput,
   FilesListResult,
+  FilesLocateInput,
+  FilesLocateResult,
+  FilesReadBytesInput,
+  FilesReadBytesResult,
   FilesReadInput,
   FilesReadResult,
+  FilesStatInput,
+  FilesStatResult,
 } from "./files.ts";
 import {
   AgentSessionImportInput,
@@ -439,6 +445,9 @@ export const WS_METHODS = {
   filesystemGetMetadata: "filesystem.getMetadata",
   filesRead: "files.read",
   filesList: "files.list",
+  filesLocate: "files.locate",
+  filesStat: "files.stat",
+  filesReadBytes: "files.readBytes",
   agentSessionsScan: "agentSessions.scan",
   agentSessionsImport: "agentSessions.import",
   assetsCreateUrl: "assets.createUrl",
@@ -1404,6 +1413,24 @@ const WsFilesListRpc = Rpc.make(WS_METHODS.filesList, {
   error: Schema.Union([FilesError, EnvironmentAuthorizationError]),
 });
 
+const WsFilesLocateRpc = Rpc.make(WS_METHODS.filesLocate, {
+  payload: FilesLocateInput,
+  success: FilesLocateResult,
+  error: Schema.Union([FilesError, EnvironmentAuthorizationError]),
+});
+
+const WsFilesStatRpc = Rpc.make(WS_METHODS.filesStat, {
+  payload: FilesStatInput,
+  success: FilesStatResult,
+  error: Schema.Union([FilesError, EnvironmentAuthorizationError]),
+});
+
+const WsFilesReadBytesRpc = Rpc.make(WS_METHODS.filesReadBytes, {
+  payload: FilesReadBytesInput,
+  success: FilesReadBytesResult,
+  error: Schema.Union([FilesError, EnvironmentAuthorizationError]),
+});
+
 const WsAgentSessionsScanRpc = Rpc.make(WS_METHODS.agentSessionsScan, {
   payload: AgentSessionScanInput,
   success: AgentSessionScanResult,
@@ -2162,6 +2189,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsFilesystemGetMetadataRpc,
   WsFilesReadRpc,
   WsFilesListRpc,
+  WsFilesLocateRpc,
+  WsFilesStatRpc,
+  WsFilesReadBytesRpc,
   WsAgentSessionsScanRpc,
   WsAgentSessionsImportRpc,
   WsAssetsCreateUrlRpc,

@@ -12,6 +12,9 @@ import {
 } from "@t3tools/contracts";
 import { Tool, Toolkit } from "effect/ai";
 
+import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
+import { FileLocator } from "../../../files/FileLocator.ts";
+import * as ProjectService from "../../../project/ProjectService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as VoiceSessionService from "../../../orchestration-v2/VoiceSessionService.ts";
 import * as UiRequests from "../../../uiRequests/UiRequests.ts";
@@ -32,6 +35,9 @@ const UiOpenTool = Tool.make("ui_open", {
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     UiRequests.UiRequests,
+    FileLocator,
+    ProjectService.ProjectService,
+    ServerEnvironment.ServerEnvironment,
   ],
 })
   .annotate(McpDomainAnnotation, "threads")

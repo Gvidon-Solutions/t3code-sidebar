@@ -25,6 +25,9 @@ import { McpInvocationContext } from "./McpInvocationContext.ts";
 import * as Access from "./McpToolAccess.ts";
 import { UiToolkit } from "./toolkits/ui/tools.ts";
 import * as UiHandlers from "./toolkits/ui/handlers.ts";
+import { FileLocator } from "../files/FileLocator.ts";
+import { ProjectService } from "../project/ProjectService.ts";
+import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
 import { UiRequests } from "../uiRequests/UiRequests.ts";
 import { VoiceSessionServiceV2 } from "../orchestration-v2/VoiceSessionService.ts";
 import { liveThreadShell } from "./McpToolAccess.testkit.ts";
@@ -197,6 +200,9 @@ it.effect(
               return 1;
             }),
         }),
+        Layer.mock(FileLocator)({}),
+        Layer.mock(ProjectService)({}),
+        Layer.mock(ServerEnvironment)({}),
       );
       const ui = yield* UiToolkit.pipe(
         Effect.provide(

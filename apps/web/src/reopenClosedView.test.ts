@@ -63,6 +63,45 @@ describe("reopenClosedView", () => {
     expect(openPreview).not.toHaveBeenCalled();
   });
 
+  it("M6 · restores a foreign file's machine, root and remap details", async () => {
+    const reopened = await reopenClosedView(
+      {
+        kind: "panel-tab",
+        threadRef,
+        surface: {
+          kind: "file",
+          id: "file:/srv/repo/src/app.ts",
+          relativePath: "/srv/repo/src/app.ts",
+          revealLine: 3,
+          revealRequestId: 2,
+          environmentId: "cloudbox",
+          workspaceRoot: "/srv/repo",
+          projectName: "repo",
+          root: "/srv/repo",
+          rawPath: "src/app.ts",
+          notSynced: true,
+          resolvedDisplayPath: "apps/web/src/app.ts",
+          worktreeRemoved: true,
+        },
+      },
+      { openPreview: vi.fn(), workspaceAvailable: true },
+    );
+    expect(reopened).toBe(true);
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef);
+    expect(state.surfaces).toMatchObject([
+      {
+        id: "file:cloudbox:/srv/repo/src/app.ts",
+        environmentId: "cloudbox",
+        workspaceRoot: "/srv/repo",
+        root: "/srv/repo",
+        rawPath: "src/app.ts",
+        notSynced: true,
+        resolvedDisplayPath: "apps/web/src/app.ts",
+        worktreeRemoved: true,
+      },
+    ]);
+  });
+
   it("does not reopen workspace tabs without an available project", async () => {
     const options = {
       openPreview: vi.fn(),

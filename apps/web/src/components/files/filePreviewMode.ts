@@ -1,10 +1,18 @@
-import type { AssetResource, ProjectReadFileError, ScopedThreadRef } from "@t3tools/contracts";
+import type {
+  AssetResource,
+  EnvironmentId,
+  ProjectReadFileError,
+  ScopedThreadRef,
+} from "@t3tools/contracts";
 import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
 import { isHostPath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 
 export function resolveFilePreviewPath(path: string | null, cwd: string): string | null {
   if (path === null) return null;
-  return path === "." || workspaceRelativeFilePath(path, cwd) === "." ? null : path;
+  const relative = workspaceRelativeFilePath(path, cwd);
+  if (path === "." || relative === ".") return null;
+  // People read paths from the project, not from the machine's root.
+  return relative ?? path;
 }
 
 export const isMarkdownPreviewFile = (path: string): boolean =>
@@ -68,7 +76,16 @@ export function workspaceAssetResource(input: {
   readonly draft: boolean;
   readonly workspaceRoot: string;
   readonly absolutePath: string;
+  /** The file lives on another machine; mint a proxy URL instead of a direct one. */
+  readonly peerEnvironmentId?: EnvironmentId;
 }): AssetResource {
+  if (input.peerEnvironmentId !== undefined) {
+    return {
+      _tag: "peer-file",
+      environmentId: input.peerEnvironmentId,
+      path: input.absolutePath,
+    };
+  }
   if (input.draft) {
     return { _tag: "draft-workspace-file", cwd: input.workspaceRoot, path: input.absolutePath };
   }

@@ -1,5 +1,6 @@
 import {
   AuthEnvironmentMaintainScope,
+  EnvironmentId,
   AuthDiagnosticsReadScope,
   AuthFilesystemReadScope,
   AuthProvidersManageScope,
@@ -360,6 +361,7 @@ it.effect("separates host file URLs from readable attachment URLs", () =>
       { _tag: "workspace-file", threadId: ThreadId.make("thread"), path: "file.txt" },
       { _tag: "media-file", threadId: ThreadId.make("thread"), path: "/repo/image.png" },
       { _tag: "draft-workspace-file", cwd: "/repo", path: "file.txt" },
+      { _tag: "peer-file", environmentId: EnvironmentId.make("studio"), path: "/srv/secret" },
     ] as const) {
       expect(
         yield* client[WS_METHODS.assetsCreateUrl]({ resource }).pipe(Effect.flip),

@@ -39,6 +39,8 @@ import type { WorkerPoolManager } from "@pierre/diffs/worker";
 import { EditProvider, File, Virtualizer, useWorkerPool } from "@pierre/diffs/react";
 import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
 import { useFilesystemReadAccess } from "~/state/filesystem";
+import { pickFilesEnvironment } from "@t3tools/client-runtime/files";
+import { environmentSummaries } from "~/state/presentation";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -63,7 +65,7 @@ import { resolveDiffThemeName } from "~/lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
 import { cn } from "~/lib/utils";
 import type { ChatFileAttachment } from "~/types";
-import { isHostPath } from "@t3tools/shared/path";
+import { isHostPath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
@@ -75,6 +77,8 @@ import { useEnvironmentHttpBaseUrl, usePrimaryEnvironmentId } from "~/state/envi
 import { previewEnvironment } from "~/state/preview";
 import { serverEnvironment } from "~/state/server";
 import { useEnvironmentScope } from "~/state/session";
+import { filesEnvironment } from "~/state/files";
+import { useEnvironmentQuery } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 
@@ -135,6 +139,18 @@ interface FilePreviewPanelProps {
   cwd: string;
   projectName: string;
   relativePath: string | null;
+  /** Read from a primary because the thread's replica does not sync it. */
+  notSynced?: boolean;
+  /** The path as written, when it differs from the resolved one. */
+  rawPath?: string;
+  /** False when the file sits outside the thread's project. */
+  inProject?: boolean;
+  /** The resolved path as a person should read it, for the remap caption. */
+  resolvedDisplayPath?: string;
+  /** The thread worktree was gone and the project root was used instead. */
+  worktreeRemoved?: boolean;
+  /** The machine serving a not-synced file, shown apart from the project name. */
+  machineLabel?: string;
   attachment?: ChatFileAttachment;
   threadRef: ScopedThreadRef;
   composerDraftTarget: ScopedThreadRef | DraftId;
@@ -168,6 +184,8 @@ type FilePostRender = <LAnnotation>(
 
 function WorkspaceImagePreview(props: {
   readonly environmentId: EnvironmentId;
+  readonly callEnvironmentId: EnvironmentId;
+  readonly peerEnvironmentId?: EnvironmentId;
   readonly threadRef: ScopedThreadRef;
   readonly draft: boolean;
   readonly absolutePath: string;
@@ -184,8 +202,11 @@ function WorkspaceImagePreview(props: {
     draft: props.draft,
     workspaceRoot: props.workspaceRoot,
     absolutePath: props.absolutePath,
+    ...(props.peerEnvironmentId === undefined
+      ? {}
+      : { peerEnvironmentId: props.peerEnvironmentId }),
   });
-  const assetUrl = useAssetUrlState(props.environmentId, resource);
+  const assetUrl = useAssetUrlState(props.callEnvironmentId, resource);
   const revisionSuffix =
     props.workspaceMutationId === null
       ? ""
@@ -224,6 +245,8 @@ function WorkspaceImagePreview(props: {
 
 function WorkspaceBrowserPreview(props: {
   readonly environmentId: EnvironmentId;
+  readonly callEnvironmentId: EnvironmentId;
+  readonly peerEnvironmentId?: EnvironmentId;
   readonly threadRef: ScopedThreadRef;
   readonly draft: boolean;
   readonly absolutePath: string;
@@ -238,9 +261,12 @@ function WorkspaceBrowserPreview(props: {
     draft: props.draft,
     workspaceRoot: props.workspaceRoot,
     absolutePath: props.absolutePath,
+    ...(props.peerEnvironmentId === undefined
+      ? {}
+      : { peerEnvironmentId: props.peerEnvironmentId }),
   });
   const assetUrl = useAssetUrlState(
-    props.environmentId,
+    props.callEnvironmentId,
     resource,
     pdf ? props.workspaceMutationId : undefined,
   );
@@ -281,6 +307,8 @@ function WorkspaceBrowserPreview(props: {
 
 function WorkspaceVideoPreview(props: {
   readonly environmentId: EnvironmentId;
+  readonly callEnvironmentId: EnvironmentId;
+  readonly peerEnvironmentId?: EnvironmentId;
   readonly threadRef: ScopedThreadRef;
   readonly draft: boolean;
   readonly absolutePath: string;
@@ -294,14 +322,17 @@ function WorkspaceVideoPreview(props: {
     draft: props.draft,
     workspaceRoot: props.workspaceRoot,
     absolutePath: props.absolutePath,
+    ...(props.peerEnvironmentId === undefined
+      ? {}
+      : { peerEnvironmentId: props.peerEnvironmentId }),
   });
   // Each workspace mutation re-mints the URL, so an edited file loads its new bytes.
   const assetUrl = useAssetUrlState(
-    props.environmentId,
+    props.callEnvironmentId,
     resource,
     props.workspaceMutationId ?? undefined,
   );
-  const refreshAssetUrl = useAssetUrlRefresh(props.environmentId, resource);
+  const refreshAssetUrl = useAssetUrlRefresh(props.callEnvironmentId, resource);
   // Servers that report the file's revision let an unchanged file stay loaded; older ones
   // only offer the workspace mutation, which changes after every command. The revision also
   // goes in the URL, since two mints in the same millisecond sign identical URLs.
@@ -338,6 +369,8 @@ function WorkspaceVideoPreview(props: {
 
 function WorkspaceAudioPreview(props: {
   readonly environmentId: EnvironmentId;
+  readonly callEnvironmentId: EnvironmentId;
+  readonly peerEnvironmentId?: EnvironmentId;
   readonly threadRef: ScopedThreadRef;
   readonly draft: boolean;
   readonly absolutePath: string;
@@ -351,13 +384,16 @@ function WorkspaceAudioPreview(props: {
     draft: props.draft,
     workspaceRoot: props.workspaceRoot,
     absolutePath: props.absolutePath,
+    ...(props.peerEnvironmentId === undefined
+      ? {}
+      : { peerEnvironmentId: props.peerEnvironmentId }),
   });
   const assetUrl = useAssetUrlState(
-    props.environmentId,
+    props.callEnvironmentId,
     resource,
     props.workspaceMutationId ?? undefined,
   );
-  const refreshAssetUrl = useAssetUrlRefresh(props.environmentId, resource);
+  const refreshAssetUrl = useAssetUrlRefresh(props.callEnvironmentId, resource);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const fileRevision = assetUrl._tag === "Success" ? assetUrl.fileRevision : undefined;
   const revision = fileRevision ?? props.workspaceMutationId;
@@ -990,6 +1026,12 @@ export default function FilePreviewPanel({
   cwd,
   projectName,
   relativePath: requestedPath,
+  notSynced,
+  rawPath,
+  inProject,
+  resolvedDisplayPath,
+  worktreeRemoved,
+  machineLabel,
   attachment,
   threadRef,
   composerDraftTarget,
@@ -1014,6 +1056,10 @@ export default function FilePreviewPanel({
   const wordWrap = wordWrapOverride ?? defaultWordWrap;
   const canOperatePreview = useEnvironmentScope(environmentId, AuthPreviewOperateScope);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const connectedEnvironmentIds = useAtomValue(environmentSummaries.connectedEnvironmentIdsAtom);
+  const callEnvironmentId =
+    pickFilesEnvironment(environmentId, connectedEnvironmentIds) ?? environmentId;
+  const peerEnvironmentId = callEnvironmentId === environmentId ? undefined : environmentId;
   const remoteOpenState = useRemoteOpenState(environmentId);
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const environmentHttpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
@@ -1040,12 +1086,44 @@ export default function FilePreviewPanel({
   const fileAccess = useFilesystemReadAccess(environmentId);
   const { canReadFiles } = fileAccess;
   const canWriteFiles = useEnvironmentScope(environmentId, AuthFilesystemWriteScope);
-  const file = useProjectFileQuery(
+  const localFile = useProjectFileQuery(
     environmentId,
     cwd,
     relativePath,
-    attachment === undefined && relativePath !== null,
+    attachment === undefined && relativePath !== null && peerEnvironmentId === undefined,
   );
+  const remoteFileQuery = useEnvironmentQuery(
+    peerEnvironmentId !== undefined && relativePath !== null
+      ? filesEnvironment.read({
+          environmentId: callEnvironmentId,
+          input: { environmentId, absolutePath: resolvePathLinkTarget(relativePath, cwd) },
+        })
+      : null,
+  );
+  const remoteFile = remoteFileQuery.data;
+  const file =
+    peerEnvironmentId === undefined
+      ? localFile
+      : {
+          ...localFile,
+          data:
+            remoteFile === null
+              ? null
+              : {
+                  relativePath: relativePath ?? "",
+                  contents: remoteFile.contents,
+                  byteLength: remoteFile.byteLength,
+                  truncated: remoteFile.truncated,
+                },
+          error:
+            remoteFile === null && remoteFileQuery.error !== null
+              ? "This file could not be read from the machine that holds it."
+              : null,
+          readError: null,
+          isPending: remoteFileQuery.isPending,
+          isNotFile: false,
+          isFile: remoteFile !== null,
+        };
   const [fileRefreshRevision, setFileRefreshRevision] = useState(0);
   const attemptedPath = file.readError?.resolvedPath ?? file.readError?.operationPath;
   // Folder links fail file reads; retain mutation refresh to detect conversion to files. Host folders own
@@ -1228,7 +1306,7 @@ export default function FilePreviewPanel({
     })();
   };
 
-  if (attachment === undefined && !canReadFiles) {
+  if (attachment === undefined && !canReadFiles && peerEnvironmentId === undefined) {
     if (fileAccess.isPending) {
       return (
         <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -1327,6 +1405,37 @@ export default function FilePreviewPanel({
           ) : null}
         </div>
       ) : null}
+      {worktreeRemoved ? (
+        <div className="shrink-0 border-b px-3 py-1 text-2xs text-muted-foreground">
+          Worktree removed · opened from the project root
+        </div>
+      ) : null}
+      {inProject === false ? (
+        <div className="shrink-0 border-b px-3 py-1 text-2xs text-muted-foreground">
+          Outside project
+        </div>
+      ) : null}
+      {notSynced ? (
+        <div className="shrink-0 border-b px-3 py-1.5 text-2xs text-muted-foreground">
+          Not synced · from {machineLabel ?? projectName ?? "the main copy"}
+        </div>
+      ) : null}
+      {rawPath !== undefined &&
+      !isHostPath(rawPath) &&
+      relativePath !== null &&
+      rawPath !==
+        (resolvedDisplayPath === undefined
+          ? relativePath
+          : (workspaceRelativeFilePath(resolvedDisplayPath, cwd) ?? resolvedDisplayPath)) ? (
+        <div className="shrink-0 border-b px-3 py-1 text-2xs text-muted-foreground">
+          <code className="font-mono">{rawPath}</code> →{" "}
+          <code className="font-mono">
+            {resolvedDisplayPath === undefined
+              ? relativePath
+              : (workspaceRelativeFilePath(resolvedDisplayPath, cwd) ?? resolvedDisplayPath)}
+          </code>
+        </div>
+      ) : null}
       {relativePath && !attachment && !isHostFile && !canWriteFiles && !fileAccess.isPending ? (
         <div className="shrink-0 border-b px-3 py-1.5 text-2xs text-muted-foreground">
           Read-only connection. Unsaved edits are kept until write access returns.
@@ -1360,6 +1469,8 @@ export default function FilePreviewPanel({
             <WorkspaceVideoPreview
               key={`${environmentId}:${threadRef.threadId}:${absolutePath}`}
               environmentId={environmentId}
+              callEnvironmentId={callEnvironmentId}
+              {...(peerEnvironmentId === undefined ? {} : { peerEnvironmentId })}
               threadRef={threadRef}
               draft={draft}
               absolutePath={absolutePath}
@@ -1371,6 +1482,8 @@ export default function FilePreviewPanel({
             <WorkspaceAudioPreview
               key={`${environmentId}:${threadRef.threadId}:${absolutePath}`}
               environmentId={environmentId}
+              callEnvironmentId={callEnvironmentId}
+              {...(peerEnvironmentId === undefined ? {} : { peerEnvironmentId })}
               threadRef={threadRef}
               draft={draft}
               absolutePath={absolutePath}
@@ -1382,6 +1495,8 @@ export default function FilePreviewPanel({
             <WorkspaceImagePreview
               key={absolutePath}
               environmentId={environmentId}
+              callEnvironmentId={callEnvironmentId}
+              {...(peerEnvironmentId === undefined ? {} : { peerEnvironmentId })}
               threadRef={threadRef}
               draft={draft}
               absolutePath={absolutePath}
@@ -1393,6 +1508,8 @@ export default function FilePreviewPanel({
             <WorkspaceBrowserPreview
               key={absolutePath}
               environmentId={environmentId}
+              callEnvironmentId={callEnvironmentId}
+              {...(peerEnvironmentId === undefined ? {} : { peerEnvironmentId })}
               threadRef={threadRef}
               draft={draft}
               absolutePath={absolutePath}
@@ -1411,6 +1528,8 @@ export default function FilePreviewPanel({
             <WorkspaceLargeTextPreview
               key={`${absolutePath}:${renderTable}:${fileRefreshRevision}`}
               environmentId={environmentId}
+              callEnvironmentId={callEnvironmentId}
+              {...(peerEnvironmentId === undefined ? {} : { peerEnvironmentId })}
               threadRef={threadRef}
               absolutePath={absolutePath}
               name={relativePath}
@@ -1560,6 +1679,8 @@ export default function FilePreviewPanel({
 const LargeTextViewer = lazy(() => import("./LargeTextViewer"));
 export function WorkspaceLargeTextPreview(props: {
   environmentId: EnvironmentId;
+  callEnvironmentId: EnvironmentId;
+  peerEnvironmentId?: EnvironmentId;
   threadRef: ScopedThreadRef;
   absolutePath: string;
   name: string;
@@ -1569,12 +1690,20 @@ export function WorkspaceLargeTextPreview(props: {
   revealRequestId: number;
   wordWrap: boolean;
 }) {
-  const resource = {
-    _tag: "media-file",
-    threadId: props.threadRef.threadId,
-    path: props.absolutePath,
-    disposition: "attachment",
-  } as const;
+  const resource =
+    props.peerEnvironmentId === undefined
+      ? ({
+          _tag: "media-file",
+          threadId: props.threadRef.threadId,
+          path: props.absolutePath,
+          disposition: "attachment",
+        } as const)
+      : ({
+          _tag: "peer-file",
+          environmentId: props.peerEnvironmentId,
+          path: props.absolutePath,
+          disposition: "attachment",
+        } as const);
   const copyContents = useRef<(() => Promise<string>) | null>(null);
   const { copyToClipboard, isCopied } = useCopyToClipboard({ target: props.name });
   const [saving, setSaving] = useState(false);
@@ -1588,11 +1717,11 @@ export function WorkspaceLargeTextPreview(props: {
   };
   // Each workspace mutation re-mints the URL, so an edited file loads its new bytes.
   const assetUrl = useAssetUrlState(
-    props.environmentId,
+    props.callEnvironmentId,
     resource,
     props.workspaceMutationId ?? undefined,
   );
-  const refreshAssetUrl = useAssetUrlRefresh(props.environmentId, resource);
+  const refreshAssetUrl = useAssetUrlRefresh(props.callEnvironmentId, resource);
   const contentRevision = JSON.stringify([
     props.environmentId,
     resource,
