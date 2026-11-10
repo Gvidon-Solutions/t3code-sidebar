@@ -32,7 +32,10 @@ export const select = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.ui.select")(function* (selection, event) {
     yield* authorizeUiSender(event);
     const trusted = event?.senderFrame?.url !== undefined && isBundledUiUrl(event.senderFrame.url);
-    return yield* (yield* DesktopUi).select(selection, { trustedClient: trusted });
+    return yield* (yield* DesktopUi).select(selection, {
+      trustedClient: trusted,
+      ...(event?.sender.id === undefined ? {} : { rendererId: event.sender.id }),
+    });
   }),
 });
 export const getInfo = DesktopIpc.makeIpcMethod({

@@ -102,9 +102,10 @@ export class DesktopUi extends Context.Service<
     readonly cachedSelectionLabel: Effect.Effect<string | null>;
     readonly connectionOrigins: Effect.Effect<ReadonlyArray<string>, DesktopUiError>;
     readonly sourceOrigin: Effect.Effect<URL | null>;
+    readonly sourceOriginFor: (rendererId: number | null) => Effect.Effect<URL | null>;
     readonly select: (
       selection: DesktopUiSelection,
-      options?: { readonly trustedClient?: boolean },
+      options?: { readonly trustedClient?: boolean; readonly rendererId?: number },
     ) => Effect.Effect<boolean, DesktopUiError>;
     readonly serverAuthorization: (origin: URL) => Effect.Effect<ServerUiAuthorization | null>;
     readonly noteAuthorizationRejected: (origin: URL, authorization: string) => Effect.Effect<void>;
@@ -124,6 +125,12 @@ export const make = Effect.gen(function* () {
   const ssh = yield* DesktopSshEnvironment.DesktopSshEnvironment;
   const selected = yield* Ref.make<DesktopUiSelection | null>(null);
   const rejections = yield* Ref.make<ReadonlyMap<string, RejectionRecord>>(new Map());
+  // Server UI credentials are per source origin, so another window selecting its own
+  // environment cannot withhold this window's credential.
+  const authorizedOrigins = yield* Ref.make<
+    ReadonlyMap<string, { readonly environmentId: EnvironmentId; readonly serverVersion: string }>
+  >(new Map());
+  const rendererSelections = yield* Ref.make<ReadonlyMap<number, DesktopUiSelection>>(new Map());
   const loaded = yield* Ref.make<{
     origin: string | null;
     reason: string | null;
@@ -139,6 +146,26 @@ export const make = Effect.gen(function* () {
   const selectionPath = path.join(environment.stateDir, "ui-source.json");
   const serverUiIsNewer = (serverVersion: string) =>
     isStrictlyNewerSemver(serverVersion, environment.appVersion);
+  const rememberOrigin = (origin: string, environmentId: EnvironmentId, serverVersion: string) =>
+    Ref.update(authorizedOrigins, (current) => {
+      const next = new Map(current);
+      next.set(origin, { environmentId, serverVersion });
+      return next;
+    });
+  const forgetOrigin = (origin: string) =>
+    Ref.update(authorizedOrigins, (current) => {
+      if (!current.has(origin)) return current;
+      const next = new Map(current);
+      next.delete(origin);
+      return next;
+    });
+  const selectionFor = Effect.fn("desktop.ui.selectionFor")(function* (rendererId: number | null) {
+    if (rendererId !== null) {
+      const perRenderer = (yield* Ref.get(rendererSelections)).get(rendererId);
+      if (perRenderer !== undefined) return perRenderer;
+    }
+    return yield* Ref.get(selected);
+  });
   // A source only exists for an environment this shell can serve: the local backend
   // while it is on, or a saved connection that is not toggled off.
   const environmentCanServeUi = Effect.fn("desktop.ui.environmentCanServeUi")(function* (
@@ -338,10 +365,10 @@ export const make = Effect.gen(function* () {
                 origin !== null && token !== null
                   ? yield* rejectionIsActive(value.environmentId, origin, token)
                   : false;
-              return {
-                ...value,
-                httpBaseUrl: direct && token !== null && !rejected ? origin : null,
-              };
+              const httpBaseUrl = direct && token !== null && !rejected ? origin : null;
+              if (httpBaseUrl !== null)
+                yield* rememberOrigin(httpBaseUrl, value.environmentId, value.serverVersion);
+              return { ...value, httpBaseUrl };
             }),
           ),
           Effect.flatMap((value) => Ref.set(selected, value)),
@@ -360,8 +387,12 @@ export const make = Effect.gen(function* () {
     Effect.tap((label) => Ref.set(labelCache, label)),
   );
   const select = Effect.fn("desktop.ui.select")(
-    function* (input: DesktopUiSelection, options?: { readonly trustedClient?: boolean }) {
+    function* (
+      input: DesktopUiSelection,
+      options?: { readonly trustedClient?: boolean; readonly rendererId?: number },
+    ) {
       yield* restore;
+      const rendererId = options?.rendererId ?? null;
       const direct =
         (yield* environmentCanServeUi(input.environmentId)) &&
         input.httpBaseUrl !== null &&
@@ -369,7 +400,7 @@ export const make = Effect.gen(function* () {
           ? yield* authorize(input)
           : false;
       const origin = direct ? desktopUiOrigin(input.httpBaseUrl!) : null;
-      const current = yield* Ref.get(selected);
+      const current = yield* selectionFor(rendererId);
       const token = origin === null ? null : yield* credentialFor(input.environmentId, origin);
       const rejected =
         origin !== null && token !== null
@@ -377,12 +408,22 @@ export const make = Effect.gen(function* () {
           : false;
       const trusted = options?.trustedClient !== false;
       const changesEnvironment = current !== null && current.environmentId !== input.environmentId;
-      // The reduced server UI cannot prove who it is; a switch to another environment
-      // goes through the trusted client, which has the saved connection.
-      const requiresTrustedHop = !trusted && changesEnvironment;
+      // A reduced server UI may refresh only the source of its own window. Moving the
+      // shell's persisted selection would break another window's source and credential.
+      if (!trusted && changesEnvironment) {
+        if (origin !== null && token !== null && !rejected && serverUiIsNewer(input.serverVersion))
+          yield* rememberOrigin(origin, input.environmentId, input.serverVersion);
+        else if (input.httpBaseUrl !== null) {
+          const invalidOrigin = yield* Effect.try(() => desktopUiOrigin(input.httpBaseUrl!)).pipe(
+            Effect.orElseSucceed(() => null),
+          );
+          if (invalidOrigin !== null) yield* forgetOrigin(invalidOrigin);
+        }
+        return false;
+      }
       const normalized = {
         ...input,
-        httpBaseUrl: direct && token !== null && !rejected && !requiresTrustedHop ? origin : null,
+        httpBaseUrl: direct && token !== null && !rejected ? origin : null,
         // An untrusted source may refresh the same source but not churn its version.
         ...(!trusted && current !== null && !changesEnvironment
           ? { serverVersion: current.serverVersion }
@@ -392,15 +433,81 @@ export const make = Effect.gen(function* () {
         current?.environmentId === normalized.environmentId &&
         current.httpBaseUrl === normalized.httpBaseUrl &&
         current.serverVersion === normalized.serverVersion
-      )
+      ) {
+        if (normalized.httpBaseUrl !== null)
+          yield* rememberOrigin(
+            normalized.httpBaseUrl,
+            normalized.environmentId,
+            normalized.serverVersion,
+          );
+        if (rendererId !== null)
+          yield* Ref.update(rendererSelections, (values) => {
+            const next = new Map(values);
+            next.set(rendererId, normalized);
+            return next;
+          });
         return false;
+      }
+      // The coordinator reloads only when the loaded document changes. A bundled-only
+      // environment switch and the first bundled selection change no document.
+      const sourceChanged =
+        current === null
+          ? normalized.httpBaseUrl !== null
+          : current.httpBaseUrl !== normalized.httpBaseUrl;
+      const versionChanged =
+        normalized.httpBaseUrl !== null &&
+        current?.httpBaseUrl === normalized.httpBaseUrl &&
+        current.serverVersion !== normalized.serverVersion;
+      if (!trusted) {
+        const changed =
+          current?.httpBaseUrl !== normalized.httpBaseUrl ||
+          (normalized.httpBaseUrl !== null && current?.serverVersion !== normalized.serverVersion);
+        if (rendererId !== null)
+          yield* Ref.update(rendererSelections, (values) => {
+            const next = new Map(values);
+            next.set(rendererId, normalized);
+            return next;
+          });
+        if (normalized.httpBaseUrl !== null)
+          yield* rememberOrigin(
+            normalized.httpBaseUrl,
+            normalized.environmentId,
+            normalized.serverVersion,
+          );
+        return changed;
+      }
       const encoded = yield* encodeSelection(normalized);
       yield* fs.makeDirectory(environment.stateDir, { recursive: true });
       yield* fs.writeFileString(selectionPath + ".tmp", encoded);
       yield* fs.rename(selectionPath + ".tmp", selectionPath);
       yield* Ref.set(selected, normalized);
+      if (rendererId !== null)
+        yield* Ref.update(rendererSelections, (values) => {
+          const next = new Map(values);
+          next.set(rendererId, normalized);
+          return next;
+        });
+      if (normalized.httpBaseUrl !== null) {
+        yield* rememberOrigin(
+          normalized.httpBaseUrl,
+          normalized.environmentId,
+          normalized.serverVersion,
+        );
+      } else if (
+        !rejected &&
+        current !== null &&
+        current.httpBaseUrl !== null &&
+        current.environmentId === normalized.environmentId
+      ) {
+        // A temporary rejection keeps the origin record: serverAuthorization still
+        // withholds the credential until its cooldown ends.
+        const previousOrigin = yield* Effect.try(() => desktopUiOrigin(current.httpBaseUrl!)).pipe(
+          Effect.orElseSucceed(() => null),
+        );
+        if (previousOrigin !== null) yield* forgetOrigin(previousOrigin);
+      }
       yield* refreshLabel;
-      return !environment.isDevelopment;
+      return (sourceChanged || versionChanged) && !environment.isDevelopment;
     },
     mutex.withPermits(1),
     Effect.mapError(
@@ -411,16 +518,37 @@ export const make = Effect.gen(function* () {
         }),
     ),
   );
+  const resolveSourceOrigin = Effect.fn("desktop.ui.resolveSourceOrigin")(function* (
+    current: DesktopUiSelection | null,
+  ) {
+    if (current !== null) {
+      if (current.httpBaseUrl === null) return null;
+      if (!serverUiIsNewer(current.serverVersion)) return null;
+      if (!(yield* environmentCanServeUi(current.environmentId))) return null;
+      const origin = desktopUiOrigin(current.httpBaseUrl);
+      const token = yield* credentialFor(current.environmentId, origin);
+      if (token === null) return null;
+      if (yield* rejectionIsActive(current.environmentId, origin, token)) return null;
+      return new URL(current.httpBaseUrl);
+    }
+    // With no saved source the bundled client starts first; it selects the server UI
+    // only when that server's UI is newer than this shell's bundled client.
+    return null;
+  });
   return DesktopUi.of({
     connectionOrigins: Effect.gen(function* () {
       const local = yield* exposure.backendConfig;
       const selectedSource = yield* Ref.get(selected);
+      const selectedUsable =
+        selectedSource !== null && (yield* environmentCanServeUi(selectedSource.environmentId));
       const raw = yield* catalog.get;
       const doc = Option.isSome(raw) ? yield* decodeCatalog(raw.value) : null;
       return [
         ...new Set([
           ...(local.port > 0 ? [local.httpBaseUrl.origin] : []),
-          ...(selectedSource?.httpBaseUrl ? [new URL(selectedSource.httpBaseUrl).origin] : []),
+          ...(selectedUsable && selectedSource?.httpBaseUrl
+            ? [new URL(selectedSource.httpBaseUrl).origin]
+            : []),
           ...(doc?.profiles.flatMap((entry) =>
             entry._tag === "BearerConnectionProfile" &&
             !doc.disabledEnvironmentIds.includes(entry.environmentId)
@@ -440,30 +568,24 @@ export const make = Effect.gen(function* () {
     sourceOrigin: Effect.gen(function* () {
       yield* restore;
       const current = yield* Ref.get(selected);
-      if (current !== null) {
-        if (current.httpBaseUrl === null) return null;
-        if (!serverUiIsNewer(current.serverVersion)) return null;
-        if (!(yield* environmentCanServeUi(current.environmentId))) return null;
-        const origin = desktopUiOrigin(current.httpBaseUrl);
-        const token = yield* credentialFor(current.environmentId, origin);
-        if (token === null) return null;
-        if (yield* rejectionIsActive(current.environmentId, origin, token)) return null;
-        return new URL(current.httpBaseUrl);
-      }
-      // With no saved source the bundled client starts first; it selects the server UI
-      // only when that server's UI is newer than this shell's bundled client.
-      return null;
+      return yield* resolveSourceOrigin(current);
+    }),
+    sourceOriginFor: Effect.fn("desktop.ui.sourceOriginFor")(function* (rendererId) {
+      yield* restore;
+      const current = yield* selectionFor(rendererId);
+      return yield* resolveSourceOrigin(current);
     }),
     select,
     serverAuthorization: Effect.fn("desktop.ui.serverAuthorization")(function* (origin: URL) {
+      yield* restore;
       const source = desktopUiOrigin(origin.href);
       const environmentId = yield* environmentForOrigin(source);
       if (environmentId === null) return null;
-      const current = yield* Ref.get(selected);
+      const record = (yield* Ref.get(authorizedOrigins)).get(source);
       if (
-        current === null ||
-        current.environmentId !== environmentId ||
-        !serverUiIsNewer(current.serverVersion)
+        record === undefined ||
+        record.environmentId !== environmentId ||
+        !serverUiIsNewer(record.serverVersion)
       )
         return null;
       const token = yield* credentialFor(environmentId, source);

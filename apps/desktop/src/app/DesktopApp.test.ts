@@ -168,6 +168,7 @@ it.effect(
               connectionOrigins: Effect.succeed([]),
               select: () => Effect.succeed(false),
               sourceOrigin: Effect.succeed(null),
+              sourceOriginFor: () => Effect.succeed(null),
               serverAuthorization: () => Effect.succeed(null),
               noteAuthorizationRejected: () => Effect.void,
               retryServerUi: Effect.void,
