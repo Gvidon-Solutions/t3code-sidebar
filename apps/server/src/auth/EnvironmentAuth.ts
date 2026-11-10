@@ -1484,10 +1484,12 @@ export const make = Effect.gen(function* () {
             if (existing.length > 0)
               return yield* new ServerAuthMcpApprovalCodeError({ reason: "unknown_or_used" });
           }
-          const approved = yield* resolveBootstrapGrant(code.trim(), {
-            requiredScopes: mcpClientScopes(access),
-            mcpApproval: access,
-          }).pipe(
+          // An approval code approves one app sign-in; it never links an environment.
+          const grantInput =
+            peer === undefined
+              ? { requiredScopes: mcpClientScopes(access), mcpApproval: access }
+              : peerPairingGrantInput(access);
+          const approved = yield* resolveBootstrapGrant(code.trim(), grantInput).pipe(
             Effect.catchTags({
               ServerAuthInvalidCredentialError: () =>
                 Effect.fail(new ServerAuthMcpApprovalCodeError({ reason: "unknown_or_used" })),
@@ -1498,7 +1500,11 @@ export const make = Effect.gen(function* () {
               grant.method !== "one-time-token" &&
               (peer !== undefined || grant.method !== "reusable-dev-token")
                 ? Effect.fail(new ServerAuthMcpApprovalCodeError({ reason: "not_a_pairing_code" }))
-                : Effect.succeed(mcpApprovalLevel(grant.subject) ?? access),
+                : peer !== undefined && mcpApprovalLevel(grant.subject) !== undefined
+                  ? Effect.fail(
+                      new ServerAuthMcpApprovalCodeError({ reason: "not_a_pairing_code" }),
+                    )
+                  : Effect.succeed(mcpApprovalLevel(grant.subject) ?? access),
             ),
           );
           // Only a redeemed owner-entered pairing code binds a peer identity. A T3 Connect
@@ -1550,6 +1556,15 @@ export const make = Effect.gen(function* () {
 });
 
 const isMcpClientAccess = Schema.is(AuthMcpClientAccess);
+
+/** A peer redeems a plain pairing code. Omitting the app-approval opt-in makes the SQL gate
+ * unable to match an `mcp-approval:<level>` row, so the separation is structural, not a string
+ * check on the code's shape. */
+export const peerPairingGrantInput = (
+  access: AuthMcpClientAccess,
+): { readonly requiredScopes: ReadonlyArray<AuthEnvironmentScope> } => ({
+  requiredScopes: mcpClientScopes(access),
+});
 
 /** The level an approval code's subject names, or undefined for any other code. */
 const mcpApprovalLevel = (subject: string): AuthMcpClientAccess | undefined => {

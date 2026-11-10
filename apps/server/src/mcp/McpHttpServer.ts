@@ -241,6 +241,13 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
   const meshRelay = yield* MeshRelay;
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
   const clients = yield* Effect.serviceOption(McpClientAuthenticator);
+  if (Option.isNone(clients)) {
+    // Fail-closed is not enough: a layer-graph slip would turn every OAuth and peer sign-in off
+    // without a trace, so say it at startup.
+    yield* Effect.logError(
+      "McpClientAuthenticator is not configured; OAuth and peer-linked sign-in are disabled. Provide McpOAuth.layerMcpClientAuthenticator.",
+    );
+  }
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const runtimeModeCeiling = serverSettings.managedPolicy?.limits?.maxRuntimeMode;
   const linksEnabled = serverSettings.getSettings.pipe(

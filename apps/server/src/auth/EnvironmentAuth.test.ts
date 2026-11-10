@@ -994,3 +994,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
     );
   },
 );
+
+it("a peer pairing grant never opts into an app approval code", () => {
+  const input = EnvironmentAuth.peerPairingGrantInput("auto");
+  // The SQL gate only matches `mcp-approval:<level>` rows when the caller passes mcpApproval.
+  // Omitting it is what keeps an approval code from ever linking an environment.
+  expect(Object.keys(input)).toEqual(["requiredScopes"]);
+});

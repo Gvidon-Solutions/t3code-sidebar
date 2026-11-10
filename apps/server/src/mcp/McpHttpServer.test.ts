@@ -1698,3 +1698,28 @@ it.effect(
       ),
     ),
 );
+
+it.effect("logs an error when the MCP client authenticator is not wired", () => {
+  const messages: Array<unknown> = [];
+  const logger = Logger.make(({ message }) => messages.push(message));
+  return Effect.scoped(
+    Effect.gen(function* () {
+      yield* HttpRouter.serve(
+        McpHttpServer.layerMcpTransport(Layer.empty).pipe(
+          Layer.provide(Layer.mock(McpSessionRegistry.McpSessionRegistry)({})),
+          Layer.provide(ServerSettings.layerTest()),
+        ),
+        { disableListenLog: true },
+      ).pipe(
+        Layer.build,
+        Effect.provide(Layer.mergeAll(MeshTestServices.transport, NodeHttpServer.layerTest)),
+      );
+      // A layer-graph slip must not silently turn OAuth and peer sign-in off.
+      expect(
+        messages
+          .map((message) => String(message))
+          .some((message) => message.includes("McpClientAuthenticator is not configured")),
+      ).toBe(true);
+    }),
+  ).pipe(Effect.provide(Logger.layer([logger], { mergeWithExisting: false })));
+});
