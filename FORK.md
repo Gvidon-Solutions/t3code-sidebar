@@ -109,6 +109,21 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-10 — Drain ignores finished runs and repairs orphaned steps
+
+- **What.** A live update no longer waits forever for nodes left open by a run that ended weeks
+  ago. Drain admission counts a node only through its run or, for a runless node, while it is
+  recent; a terminal run closes its open todo lists, tool calls and input requests in the
+  projection. Existing databases get the same repair once at startup. The delivery target closes
+  admission immediately and polls status, so a long drain cannot hit the HTTP client timeout.
+- **How.** The drain query joins nodes to runs and bounds unowned nodes by their started time;
+  `run.updated` projection writes apply the kind-to-status map and complete todo-list plans;
+  migration `084_CloseTerminalRunNodes` performs the same idempotent repair and logs its count.
+- **Where.** `apps/server/src/mesh/DeliveryAdmission.ts`,
+  `apps/server/src/orchestration-v2/{ProjectionStore,TerminalRunNodes}.ts`,
+  `apps/server/src/persistence/Migrations/084_CloseTerminalRunNodes.ts`,
+  `scripts/delivery/target.mjs`.
+
 ### 2026-11-09 — Desktop server UI: pairing, restart recovery and safe fallback
 
 - **What.** Desktop server UI can authenticate again. Its HTTP is first-party through the shell

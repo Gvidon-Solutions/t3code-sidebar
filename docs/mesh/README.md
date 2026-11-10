@@ -38,6 +38,12 @@ to a private socket; customer paths never enter public workflow configuration. T
 Delivery health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
 `mesh/DeliveryAdmission.ts` fences run creation inside EventSink write transactions and
 allows concurrent provider starts while drain exclusively waits for all admitted starts.
+Drain admission counts a node through its run (`JOIN`): an open node whose run already ended
+cannot hold a drain. A runless node counts only while it started within the last hour; without
+a heartbeat, older ones are stale. Terminal `run.updated` projection writes close their open
+child nodes (`orchestration-v2/TerminalRunNodes.ts`: todo lists completed, tool calls
+interrupted, approval and input requests cancelled) and complete active todo-list plans, and
+migration `084_CloseTerminalRunNodes` repairs the same shapes in existing databases once.
 Abandoned persisted fences expire at startup one minute after their deadline. Admission
 failures stay typed during outbox/runtime recovery; deferred ids are read once per recovery pass. Its operational journal survives restart;
 already accepted dormant starts remain in the outbox without occupying worker slots or spending
@@ -45,6 +51,8 @@ retry attempts. Cancellation wakes the worker and queue promotions. Checking pro
 inactivity alone misses accepted start effects and internal queue promotions.
 WS, MCP and `t3ctl drain`, `t3ctl drain status`, `t3ctl drain cancel` expose the same service. The delivery service and the
 private systemd transport drain before backup/switch and reopen only after health or rollback.
+`scripts/delivery/target.mjs` closes admission with `now` and polls `t3_delivery_drain_status`
+until the server reports drained, so a long drain never outlives the HTTP client's request timeout.
 Transient updating refusals are never stored as rejected command receipts; client and CLI retries
 retain their command/message IDs. The private delivery adapter handles the initial legacy hop
 by polling running threads, including subagents, only when the drain-status tool is missing.
