@@ -25,7 +25,7 @@ export function DesktopUiVersionRow() {
   if (!source) return null;
   const origin =
     source.source === "bundled"
-      ? "Bundled offline copy"
+      ? "Built-in client"
       : source.source === "development"
         ? "Development UI"
         : source.origin;

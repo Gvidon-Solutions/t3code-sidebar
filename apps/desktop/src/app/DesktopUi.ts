@@ -5,6 +5,7 @@ import {
   PRIMARY_LOCAL_ENVIRONMENT_ID,
 } from "@t3tools/contracts";
 import { ConnectionCatalogDocument } from "@t3tools/client-runtime/platform";
+import { isStrictlyNewerSemver } from "@t3tools/shared/semver";
 import { resolveLoopbackSshHttpBaseUrl } from "@t3tools/ssh/tunnel";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -136,6 +137,24 @@ export const make = Effect.gen(function* () {
   });
   const mutex = yield* Semaphore.make(1);
   const selectionPath = path.join(environment.stateDir, "ui-source.json");
+  const serverUiIsNewer = (serverVersion: string) =>
+    isStrictlyNewerSemver(serverVersion, environment.appVersion);
+  // A source only exists for an environment this shell can serve: the local backend
+  // while it is on, or a saved connection that is not toggled off.
+  const environmentCanServeUi = Effect.fn("desktop.ui.environmentCanServeUi")(function* (
+    environmentId: EnvironmentId,
+  ) {
+    const local = yield* exposure.backendConfig;
+    if (environmentId === EnvironmentId.make(PRIMARY_LOCAL_ENVIRONMENT_ID)) return local.port > 0;
+    const raw = yield* catalog.get.pipe(Effect.orElseSucceed(() => Option.none<string>()));
+    if (Option.isNone(raw)) return false;
+    const doc = yield* decodeCatalog(raw.value).pipe(Effect.orElseSucceed(() => null));
+    if (doc === null) return false;
+    return (
+      doc.targets.some((entry) => entry.environmentId === environmentId) &&
+      !doc.disabledEnvironmentIds.includes(environmentId)
+    );
+  });
   const authorize = Effect.fn("desktop.ui.authorize")(function* (input: DesktopUiSelection) {
     const origin =
       input.httpBaseUrl === null
@@ -306,7 +325,12 @@ export const make = Effect.gen(function* () {
           Effect.flatMap(decodeSelection),
           Effect.flatMap((value) =>
             Effect.gen(function* () {
-              const direct = yield* authorize(value);
+              const direct =
+                (yield* environmentCanServeUi(value.environmentId)) &&
+                value.httpBaseUrl !== null &&
+                serverUiIsNewer(value.serverVersion)
+                  ? yield* authorize(value)
+                  : false;
               const origin = direct ? desktopUiOrigin(value.httpBaseUrl!) : null;
               const token =
                 origin === null ? null : yield* credentialFor(value.environmentId, origin);
@@ -338,7 +362,12 @@ export const make = Effect.gen(function* () {
   const select = Effect.fn("desktop.ui.select")(
     function* (input: DesktopUiSelection, options?: { readonly trustedClient?: boolean }) {
       yield* restore;
-      const direct = yield* authorize(input);
+      const direct =
+        (yield* environmentCanServeUi(input.environmentId)) &&
+        input.httpBaseUrl !== null &&
+        serverUiIsNewer(input.serverVersion)
+          ? yield* authorize(input)
+          : false;
       const origin = direct ? desktopUiOrigin(input.httpBaseUrl!) : null;
       const current = yield* Ref.get(selected);
       const token = origin === null ? null : yield* credentialFor(input.environmentId, origin);
@@ -413,26 +442,30 @@ export const make = Effect.gen(function* () {
       const current = yield* Ref.get(selected);
       if (current !== null) {
         if (current.httpBaseUrl === null) return null;
+        if (!serverUiIsNewer(current.serverVersion)) return null;
+        if (!(yield* environmentCanServeUi(current.environmentId))) return null;
         const origin = desktopUiOrigin(current.httpBaseUrl);
         const token = yield* credentialFor(current.environmentId, origin);
         if (token === null) return null;
         if (yield* rejectionIsActive(current.environmentId, origin, token)) return null;
         return new URL(current.httpBaseUrl);
       }
-      const local = yield* exposure.backendConfig;
-      if (local.port <= 0) return null;
-      const localOrigin = desktopUiOrigin(local.httpBaseUrl.href);
-      const token = yield* credentialFor(
-        EnvironmentId.make(PRIMARY_LOCAL_ENVIRONMENT_ID),
-        localOrigin,
-      );
-      return token === null ? null : local.httpBaseUrl;
+      // With no saved source the bundled client starts first; it selects the server UI
+      // only when that server's UI is newer than this shell's bundled client.
+      return null;
     }),
     select,
     serverAuthorization: Effect.fn("desktop.ui.serverAuthorization")(function* (origin: URL) {
       const source = desktopUiOrigin(origin.href);
       const environmentId = yield* environmentForOrigin(source);
       if (environmentId === null) return null;
+      const current = yield* Ref.get(selected);
+      if (
+        current === null ||
+        current.environmentId !== environmentId ||
+        !serverUiIsNewer(current.serverVersion)
+      )
+        return null;
       const token = yield* credentialFor(environmentId, source);
       if (token === null) return null;
       if (yield* rejectionIsActive(environmentId, source, token)) return null;
@@ -475,13 +508,17 @@ export const make = Effect.gen(function* () {
     ),
     recordSource: Effect.fn("desktop.ui.recordSource")(function* (origin, reason) {
       const current = yield* Ref.get(selected);
+      const bundledForVersion =
+        current !== null && current.httpBaseUrl === null && !serverUiIsNewer(current.serverVersion);
       yield* Ref.set(loaded, {
         origin: origin?.href ?? null,
         reason:
           reason ??
-          (current?.httpBaseUrl === null
-            ? "This connection has no direct UI route; using bundled client"
-            : null),
+          (bundledForVersion
+            ? "The server UI is not newer than the built-in client; using the built-in client"
+            : current?.httpBaseUrl === null
+              ? "This connection has no direct UI route; using bundled client"
+              : null),
         version:
           origin === null
             ? environment.appVersion

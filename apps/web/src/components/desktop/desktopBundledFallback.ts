@@ -41,7 +41,10 @@ export function showsDesktopBundledFallback(input: {
   readonly fallback: DesktopBundledFallback | null;
   readonly pathname: string;
 }): boolean {
-  if (input.fallback === null || input.fallback.auth === true) return false;
+  // No direct source at all is not an outage: the bundled client is the normal app
+  // there. The offline page exists only for a known server that did not answer.
+  if (input.fallback === null || input.fallback.auth === true || input.fallback.server === null)
+    return false;
   return !/^\/settings(\/|$)/u.test(input.pathname);
 }
 
@@ -67,15 +70,16 @@ function isIpLiteral(hostname: string): boolean {
   );
 }
 
-/** The name to use in the offline page: the configured machine, else a short server name. */
+/** The name to use in the offline page: the configured machine, else its address. */
 export function desktopFallbackServerLabel(fallback: DesktopBundledFallback): string {
   const name = fallback.name?.trim();
   if (name) return name.slice(0, DESKTOP_FALLBACK_NAME_MAX);
   const url = safeUrl(fallback.server);
   if (url === null) return "the server";
   if (isLoopback(url.hostname)) return "this machine";
-  if (isIpLiteral(url.hostname)) return "the server";
-  return url.hostname.split(".")[0]?.trim() || "the server";
+  // No configured name: the address is the only machine name the offline page has.
+  if (isIpLiteral(url.hostname)) return url.host;
+  return url.hostname.split(".")[0]?.trim() || url.host;
 }
 
 /** The attempted address as a muted detail line; never part of the sentence. */
@@ -103,7 +107,8 @@ export function desktopBundledRetryUrl(href: string): string {
  * path because desktop uses hash history.
  */
 export function desktopBundledLocalSettingsUrl(href: string): string {
-  const url = new URL(href);
+  // Drop the offline flags so leaving Settings does not show the offline page again.
+  const url = new URL(withoutBundledFallback(href));
   url.hash = "/settings/connections";
   return url.toString();
 }
