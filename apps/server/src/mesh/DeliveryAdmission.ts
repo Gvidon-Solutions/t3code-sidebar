@@ -24,6 +24,9 @@ const decodeStart = Schema.decodeEffect(
   Schema.fromJsonString(Schema.Struct({ runId: Schema.String })),
 );
 
+// A runless node carries no heartbeat; only a recently started one can still be live.
+const STANDALONE_NODE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000;
+
 export class DeliveryAdmission extends Context.Service<
   DeliveryAdmission,
   {
@@ -88,10 +91,34 @@ export const layer = Layer.effect(
           pendingStarts: 0,
         };
       const deferred = new Set<string>(yield* decodeRunIds(row.deferred_json));
+      const recentStandalone = DateTime.formatIso(
+        DateTime.makeUnsafe(
+          DateTime.toEpochMillis(yield* DateTime.now) - STANDALONE_NODE_ACTIVITY_WINDOW_MS,
+        ),
+      );
       const rows = yield* sql<{
-        run_id: string;
-      }>`SELECT run_id FROM orchestration_v2_projection_runs WHERE status IN ('preparing','starting','running','waiting') UNION SELECT run_id FROM orchestration_v2_projection_nodes WHERE status IN ('pending','starting','running','waiting')`;
-      const activeRuns = rows.filter((run) => !deferred.has(run.run_id)).length;
+        run_id: string | null;
+      }>`
+        SELECT run.run_id
+        FROM orchestration_v2_projection_runs AS run
+        WHERE run.status IN ('preparing','starting','running','waiting')
+        UNION
+        SELECT node.run_id
+        FROM orchestration_v2_projection_nodes AS node
+        LEFT JOIN orchestration_v2_projection_runs AS run ON run.run_id = node.run_id
+        WHERE node.status IN ('pending','running','waiting')
+          AND (
+            run.status IN ('preparing','starting','running','waiting')
+            OR (
+              run.run_id IS NULL
+              AND julianday(COALESCE(node.started_at, json_extract(node.payload_json, '$.startedAt')))
+                >= julianday(${recentStandalone})
+            )
+          )
+      `;
+      const activeRuns = rows.filter(
+        (run) => run.run_id === null || !deferred.has(run.run_id),
+      ).length;
       return {
         requestId: row.request_id,
         phase: activeRuns === 0 ? ("drained" as const) : ("draining" as const),

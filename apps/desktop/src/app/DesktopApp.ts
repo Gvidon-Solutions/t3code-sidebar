@@ -1,4 +1,5 @@
 import * as DesktopUi from "./DesktopUi.ts";
+import { loadServerUiOriginSalt } from "./DesktopUiOriginSalt.ts";
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
@@ -161,6 +162,12 @@ const stopAllPoolInstances = Effect.fn("desktop.app.stopAllPoolInstances")(
   },
 );
 
+/** The explicit dev/QA override still wins over a saved or local source. */
+export const preferConfiguredUiOrigin = (
+  configured: URL | null,
+  selected: URL | null,
+): URL | null => configured ?? selected;
+
 const bootstrap = Effect.gen(function* () {
   const state = yield* DesktopState.DesktopState;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -172,28 +179,29 @@ const bootstrap = Effect.gen(function* () {
 
   const settings = yield* desktopSettings.get;
   const uiOrigin = yield* Config.URL("T3CODE_DESKTOP_UI_URL").pipe(Config.option);
-  const uiExposure = yield* DesktopServerExposure.DesktopServerExposure;
   const resolveUiOrigin = Effect.runPromiseWith(yield* Effect.context<never>());
   const desktopUi = yield* DesktopUi.DesktopUi;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
+  const sourceSalt = yield* loadServerUiOriginSalt(environment.stateDir);
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     ...(environment.isDevelopment
       ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
       : {
           assetDirectory: environment.clientAssetsDir,
+          sourceSalt,
           connectionOrigins: () => resolveUiOrigin(desktopUi.connectionOrigins),
           onSource: (origin, reason) => resolveUiOrigin(desktopUi.recordSource(origin, reason)),
+          serverAuthorization: (origin) => resolveUiOrigin(desktopUi.serverAuthorization(origin)),
+          noteAuthorizationRejected: (origin, authorization) =>
+            resolveUiOrigin(desktopUi.noteAuthorizationRejected(origin, authorization)),
           serverOrigin: () =>
             resolveUiOrigin(
-              Effect.gen(function* () {
-                const selected = yield* desktopUi.selection;
-                if (selected) return selected.httpBaseUrl ? new URL(selected.httpBaseUrl) : null;
-                const backend = yield* uiExposure.backendConfig;
-                return Option.getOrElse(uiOrigin, () =>
-                  backend.port > 0 ? backend.httpBaseUrl : null,
-                );
-              }),
+              desktopUi.sourceOrigin.pipe(
+                Effect.map((selected) =>
+                  preferConfiguredUiOrigin(Option.getOrNull(uiOrigin), selected),
+                ),
+              ),
             ),
           serverName: () => resolveUiOrigin(desktopUi.selectionLabel),
         }),

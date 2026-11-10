@@ -1,26 +1,15 @@
-import {
-  machineTagBackground,
-  type MachineDisplay,
-} from "@t3tools/client-runtime/state/machine-display";
+import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import type { DraftMachineCardRow } from "@t3tools/client-runtime/state/mesh-layout";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { cn } from "../../lib/cn";
+import { MachineTag } from "./MachineTag";
 
 function MachineChip(props: { readonly machine: MachineDisplay }) {
   if (props.machine.tag.trim() === "") return null;
-  return (
-    <View
-      className="shrink-0 rounded px-1 py-0.5"
-      style={{ backgroundColor: machineTagBackground(props.machine.color) }}
-    >
-      <Text className="text-[10px] font-t3-bold uppercase text-foreground">
-        {props.machine.tag}
-      </Text>
-    </View>
-  );
+  return <MachineTag machine={props.machine} />;
 }
 
 /** Fork: the centred machine choice above a new-thread composer. */

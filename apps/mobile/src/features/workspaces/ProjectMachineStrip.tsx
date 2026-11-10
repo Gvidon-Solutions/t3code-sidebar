@@ -1,5 +1,4 @@
 import type { ProjectMachineStripModel } from "@t3tools/client-runtime/state/mesh-layout";
-import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
 import { Fragment, useEffect } from "react";
 import Animated, {
   cancelAnimation,
@@ -9,9 +8,9 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { Pressable, View } from "react-native";
+import { Pressable } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
-import { cn } from "../../lib/cn";
+import { MachineTag } from "./MachineTag";
 
 const colors = {
   green: "#22c55e",
@@ -49,15 +48,11 @@ function StatusDot({ pending, color }: { readonly pending: boolean; readonly col
 export function ProjectMachineStrip({
   model,
   onOpen,
-  compact = false,
 }: {
   readonly model: ProjectMachineStripModel;
-  readonly compact?: boolean;
   readonly onOpen: () => void;
 }) {
   if (model.chips.length === 0) return null;
-  const chips = compact ? model.chips.slice(0, 1) : model.chips;
-  const overflow = model.overflow + model.chips.length - chips.length;
   return (
     <Pressable
       accessibilityRole="button"
@@ -66,7 +61,7 @@ export function ProjectMachineStrip({
       onLongPress={onOpen}
       className="flex-row items-center gap-1"
     >
-      {chips.map((chip, index) => (
+      {model.chips.map((chip, index) => (
         <Fragment key={chip.environmentId}>
           {chip.role === "replica" && model.chips[index - 1]?.role !== "replica" ? (
             <Text
@@ -77,29 +72,25 @@ export function ProjectMachineStrip({
               ⇄
             </Text>
           ) : null}
-          <View
-            className="h-4 flex-row items-center gap-0.5 rounded px-1"
-            style={{
-              backgroundColor: machineTagBackground(chip.machine.color),
-              opacity: chip.muted ? 0.45 : 1,
-            }}
-          >
-            <Text
-              className={cn(
-                "font-mono text-[10px] font-t3-bold",
-                chip.muted && "text-foreground-muted",
-              )}
-              style={chip.muted ? undefined : { color: chip.machine.color }}
-            >
-              {chip.machine.tag}
-            </Text>
+          <MachineTag machine={chip.machine} muted={chip.muted}>
             {chip.role === "replica" && chip.state !== "watching" ? (
               <StatusDot pending={chip.pending} color={colors[chip.tone]} />
             ) : null}
-          </View>
+          </MachineTag>
         </Fragment>
       ))}
-      {overflow > 0 ? <Text className="text-[10px] text-foreground-muted">+{overflow}</Text> : null}
+      {model.overflow > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Also on ${model.hidden.map((chip) => chip.machine.label).join(", ")}`}
+          accessibilityHint="Opens the machines list"
+          onLongPress={onOpen}
+          onPress={onOpen}
+          className="min-h-[24px] min-w-[24px] items-center justify-center"
+        >
+          <Text className="text-[10px] text-foreground-muted">+{model.overflow}</Text>
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }

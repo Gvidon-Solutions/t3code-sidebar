@@ -4,15 +4,32 @@ export interface DesktopBundledFallback {
   readonly server: string | null;
   /** The configured machine name of that server, when the shell knows it. */
   readonly name: string | null;
+  /** Server-UI authentication failed; the saved connections are not an outage. */
+  readonly auth?: true;
 }
 
 /** Longest machine name the offline page shows; a hostile or broken name cannot overflow the title. */
 export const DESKTOP_FALLBACK_NAME_MAX = 60;
 
+/** The same window without the offline/auth flags, so the shell can choose server UI again. */
+export function withoutBundledFallback(href: string): string {
+  const url = new URL(href);
+  if (url.searchParams.get("bundled") !== "1") return href;
+  const windowId = url.searchParams.get("desktopWindowId");
+  url.search = "";
+  url.hash = "";
+  if (windowId !== null) url.searchParams.set("desktopWindowId", windowId);
+  return url.toString();
+}
+
 export function desktopBundledFallback(search: string): DesktopBundledFallback | null {
   const params = new URLSearchParams(search);
   if (params.get("bundled") !== "1") return null;
-  return { server: params.get("server"), name: params.get("name") };
+  return {
+    server: params.get("server"),
+    name: params.get("name"),
+    ...(params.get("auth") === "1" ? ({ auth: true } as const) : {}),
+  };
 }
 
 /**
@@ -24,7 +41,7 @@ export function showsDesktopBundledFallback(input: {
   readonly fallback: DesktopBundledFallback | null;
   readonly pathname: string;
 }): boolean {
-  if (input.fallback === null) return false;
+  if (input.fallback === null || input.fallback.auth === true) return false;
   return !/^\/settings(\/|$)/u.test(input.pathname);
 }
 

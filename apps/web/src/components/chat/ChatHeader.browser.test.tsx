@@ -27,6 +27,7 @@ vi.mock(import("../../hooks/useMeshLayout"), () => ({
     state: {} as never,
     edit: () => {},
   }),
+  useMeshLayoutOptional: (() => ({ config: mesh.config as never, source: null })) as never,
 }));
 
 import { render } from "../../../test/render";

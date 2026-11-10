@@ -60,6 +60,7 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
   readonly authorizeBearer?: RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization["Service"]["authorizeBearer"];
   readonly authorizeDpop?: RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization["Service"]["authorizeDpop"];
   readonly primaryBearerToken?: string;
+  readonly primaryWebSocketTicket?: string;
   readonly prepareSsh?: ClientCapabilities.SshEnvironmentGateway["Service"]["prepare"];
   readonly descriptorProtocolVersion?: number | null | undefined;
 }) => {
@@ -152,6 +153,7 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
       ClientCapabilities.PrimaryEnvironmentAuth,
       ClientCapabilities.PrimaryEnvironmentAuth.of({
         bearerToken: Effect.succeed(Option.fromNullishOr(options?.primaryBearerToken)),
+        webSocketTicket: Effect.succeed(Option.fromNullishOr(options?.primaryWebSocketTicket)),
       }),
     ),
     Layer.succeed(
@@ -206,6 +208,24 @@ describe("ConnectionResolver", () => {
         httpAuthorization: null,
         target,
       });
+    }),
+  );
+
+  it.effect("opens a cookie-auth primary with a short-lived WebSocket ticket", () =>
+    Effect.gen(function* () {
+      const layerBroker = yield* makeDependencies({ primaryWebSocketTicket: "rpc-ticket" });
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layerBroker));
+      const target = new PrimaryConnectionTarget({
+        environmentId: ENVIRONMENT_ID,
+        label: "Primary",
+        httpBaseUrl: "t3code://server-7-abc/",
+        wsBaseUrl: "wss://studio.example.test/",
+      });
+
+      const prepared = yield* broker.prepare(catalogEntry(target));
+
+      expect(prepared.httpAuthorization).toBeNull();
+      expect(prepared.socketUrl).toContain("wss://studio.example.test/ws?wsTicket=rpc-ticket");
     }),
   );
 

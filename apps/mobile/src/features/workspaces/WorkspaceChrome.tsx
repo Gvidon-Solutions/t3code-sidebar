@@ -1,3 +1,4 @@
+import { MachineTag } from "./MachineTag";
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
 import * as Dialog from "../../components/ui/Dialog";
 import type { Icon } from "@tabler/icons-react-native/types";
@@ -17,7 +18,6 @@ import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconStar from "@tabler/icons-react-native/IconStar";
 import IconUsers from "@tabler/icons-react-native/IconUsers";
 import IconWallet from "@tabler/icons-react-native/IconWallet";
-import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
 import {
   workspaceColor,
   workspaceMark,
@@ -435,8 +435,11 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       accessibilityLabel={offline ? `${item.title}, not connected to this device` : folderTitle}
       accessibilityRole="button"
       accessibilityState={{ expanded: item.open }}
-      className={cn("mt-0.5 flex-row items-center gap-2 py-0.5 pl-3 pr-2", offline && "opacity-70")}
-      hitSlop={verticalHitSlop(20)}
+      className={cn(
+        "mt-0.5 min-h-[44px] flex-row items-center gap-2 pl-3 pr-2",
+        offline && "opacity-70",
+      )}
+      hitSlop={verticalHitSlop(44)}
       onPress={() =>
         offline
           ? openSettings(navigation as Parameters<typeof openSettings>[0], "SettingsEnvironments")
@@ -482,7 +485,6 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       ) : null}
       {item.machineStrip ? (
         <ProjectMachineStrip
-          compact={folderTitle.length > 20}
           model={item.machineStrip}
           onOpen={() => props.onOpenMachines(item.projectKey)}
         />
@@ -491,9 +493,9 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
         <Pressable
           accessibilityLabel={`New thread in ${item.title}`}
           accessibilityRole="button"
-          hitSlop={boxHitSlop(28)}
+          hitSlop={boxHitSlop(40)}
           onPress={() => props.onNewThread(item.project)}
-          className="h-7 w-7 items-center justify-center rounded-full"
+          className="h-[40px] w-[40px] items-center justify-center rounded-full"
           style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
           testID={`workspace-folder-new-${item.projectKey}`}
         >
@@ -516,14 +518,9 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
             className="flex-row items-center gap-2 py-0.5 pl-9 pr-2"
             testID={`workspace-pending-${pending.environmentId}`}
           >
-            <View
-              className="h-4 items-center justify-center rounded px-1"
-              style={{ backgroundColor: machineTagBackground(pending.color) }}
-            >
-              <Text className="font-mono text-[10px] font-t3-bold uppercase text-foreground">
-                {pending.tag}
-              </Text>
-            </View>
+            <MachineTag
+              machine={{ label: pending.label, tag: pending.tag, color: pending.color }}
+            />
             <Text
               accessibilityLabel={pending.text}
               className="min-w-0 flex-1 text-[13px] text-foreground-muted"
@@ -588,8 +585,8 @@ export const WorkspaceSectionRow = memo(function WorkspaceSectionRow(props: {
     <Pressable
       accessibilityRole={toggleKey ? "button" : "header"}
       accessibilityState={toggleKey ? { expanded: item.open } : undefined}
-      className="mt-2 flex-row items-center gap-2 py-1 pl-3 pr-5"
-      hitSlop={verticalHitSlop(24)}
+      className="mt-2 min-h-[40px] flex-row items-center gap-2 pl-3 pr-5"
+      hitSlop={verticalHitSlop(40)}
       disabled={toggleKey === null}
       onPress={() => (toggleKey ? props.onToggle(toggleKey) : undefined)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
@@ -642,8 +639,8 @@ export const WorkspaceAgentsRow = memo(function WorkspaceAgentsRow(props: {
       accessibilityRole="button"
       accessibilityLabel={item.label}
       accessibilityState={{ expanded: item.open }}
-      className="min-h-7 flex-row items-center gap-2 py-0 pl-[48px] pr-5"
-      hitSlop={verticalHitSlop(28)}
+      className="min-h-[40px] flex-row items-center gap-2 pl-[48px] pr-5"
+      hitSlop={verticalHitSlop(40)}
       onPress={() => props.onToggle(item.toggleKey)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
@@ -675,8 +672,8 @@ export const WorkspaceMoreRow = memo(function WorkspaceMoreRow(props: {
   return (
     <Pressable
       accessibilityRole="button"
-      className="min-h-7 flex-row items-center gap-2 py-0.5 pl-[52px] pr-5"
-      hitSlop={verticalHitSlop(28)}
+      className="min-h-[40px] flex-row items-center gap-2 pl-[52px] pr-5"
+      hitSlop={verticalHitSlop(40)}
       onPress={() => props.onToggle(item.toggleKey)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >

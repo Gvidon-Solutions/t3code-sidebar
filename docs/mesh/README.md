@@ -38,6 +38,12 @@ to a private socket; customer paths never enter public workflow configuration. T
 Delivery health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
 `mesh/DeliveryAdmission.ts` fences run creation inside EventSink write transactions and
 allows concurrent provider starts while drain exclusively waits for all admitted starts.
+Drain admission counts a node through its run (`JOIN`): an open node whose run already ended
+cannot hold a drain. A runless node counts only while it started within the last hour; without
+a heartbeat, older ones are stale. Terminal `run.updated` projection writes close their open
+child nodes (`orchestration-v2/TerminalRunNodes.ts`: todo lists completed, tool calls
+interrupted, approval and input requests cancelled) and complete active todo-list plans, and
+migration `084_CloseTerminalRunNodes` repairs the same shapes in existing databases once.
 Abandoned persisted fences expire at startup one minute after their deadline. Admission
 failures stay typed during outbox/runtime recovery; deferred ids are read once per recovery pass. Its operational journal survives restart;
 already accepted dormant starts remain in the outbox without occupying worker slots or spending
@@ -45,6 +51,8 @@ retry attempts. Cancellation wakes the worker and queue promotions. Checking pro
 inactivity alone misses accepted start effects and internal queue promotions.
 WS, MCP and `t3ctl drain`, `t3ctl drain status`, `t3ctl drain cancel` expose the same service. The delivery service and the
 private systemd transport drain before backup/switch and reopen only after health or rollback.
+`scripts/delivery/target.mjs` closes admission with `now` and polls `t3_delivery_drain_status`
+until the server reports drained, so a long drain never outlives the HTTP client's request timeout.
 Transient updating refusals are never stored as rejected command receipts; client and CLI retries
 retain their command/message IDs. The private delivery adapter handles the initial legacy hop
 by polling running threads, including subagents, only when the drain-status tool is missing.
@@ -237,7 +245,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 - **UI.** Web `apps/web/src/components/workspaces/` (MachineTag, ProjectMachineStrip
   `A ⇄ B C`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
   ForkThreadDialog, MeshFooterStatus, FileMachineTag); mobile
-  `apps/mobile/src/features/workspaces/` (same names). Pure logic lives in
+  `apps/mobile/src/features/workspaces/` (same names). One `MachineTag` per client draws every
+  machine tag: the mesh config `appearance.machineTags` chooses `tinted` (default, machine-coloured
+  text on the machine tint), `solid` or `outline`, and `textColor` chooses machine or neutral text;
+  `machineTagPalette` moves only lightness for the active theme and keeps the hue. Project strips
+  draw up to three tags with `⇄` and use `+N` only from four machines; the project title truncates
+  first, and `+N` names the hidden machines for assistive tech and on long-press. Pure logic lives in
   `packages/client-runtime/src/state/{meshLayout/*,machineDisplay,meshMachines}.ts`.
   The Machines views and menus share `machineChoices`/`machineChoiceText`,
   `pendingRowsForProject`, `replicaLagText`, `representationCandidates`,
@@ -695,6 +708,10 @@ catalog, not a machine name or an assumed operating system.
   Add the attempted server to the fallback URL so the page can name it and retry.
 - `replicaStatusCopy` is visible row text: keep it to one short sentence and leave the server's
   long reason to `replicaStatusDetail`'s tooltip.
+- A machine tag has one component per client. Inline tints drift (white text on a near-black tint
+  on Android read as a different grey tag); configurable appearance belongs in the replicated mesh
+  config, not in each surface. Hiding tags behind "+N" while the title has room makes people guess
+  what "+1" means: draw every tag up to three and truncate the title instead.
 
 ## Mesh config core
 
@@ -706,7 +723,10 @@ holds the pure policy: `defaults`, `effectiveLinkPermissions`, `projectPolicy` (
 mode, merged ignores), `replicaRules`, `machineByName`/`ByEnvironment`/`ByPeerLabel`, `modelAlias`
 and `configDiff` for stale-apply hints.
 
-Storage lives in layout entries: `mesh.config` = `{ revision, doc, author, writtenAt }`,
+`appearance.machineTags` is presentation only: the schema validates `style`/`textColor`, apply
+stores it with the rest of the document, and materialize copies it into the broadcast
+`SidebarWorkspacesConfig.appearance` so every client of every machine draws the same tag without a
+new reconcile action. Storage lives in layout entries: `mesh.config` = `{ revision, doc, author, writtenAt }`,
 `mesh.configHistory/<revision>` (last fifty; older ones are tombstoned), bindings
 `mesh.machineBinding/<name>`, and each server's `mesh.configStatus/<environmentId>`. `mesh.configReplica/<project>/<environment>` tracks rule-owned placements and
 `mesh.linkPolicy/<receiver>/<peer>` reports installed permissions. These are
@@ -1346,6 +1366,24 @@ source. Documents require protocol `1` and bridge `reduced-1` response headers; 
 or unavailable sources redirect to the bundled origin. Server CSP forbids objects and limits
 connections to saved catalog origins. Media IPC permits only saved origins, omits credentials
 and refuses redirects. The isolated hostile-server proof is documented in delivery.md.
+
+Server-UI HTTP stays on the same `t3code://server-…` origin; the shell proxy forwards it and
+injects the bearer the trusted bundled client handed over at `ui.select`, so the reduced renderer
+never holds a credential. Browser-session cookies from the pairing flow live in the shell's jar,
+not in renderer storage. WebSocket upgrades cannot run over a custom scheme, so the client mints RPC and media tickets
+through the proxy and connects to the server's own WSS origin. Media tickets carry the same
+access for preview streams, device mirroring and their EventSource/HTTP requests. A document
+selected with an injected credential is preflighted against `/api/auth/session`; a rejected
+credential opens the bundled client in its normal state (not the offline page), so saved bearer
+connections keep working. Retry and the cooldown return to the un-flagged app URL. Source hosts
+use a salt persisted once per install (the embedded window id is per process, so only the main
+window is normally stable across launches). Server-host documents require the main-frame
+navigation recorded for the window; subframe navigations never get credentials. Credentialed
+subresources must carry the bridge's per-window proof header. Chunk and preload failures before mount show "Reconnecting to <machine>…", reload after the
+server answers, or fall back to the built-in version; the budget clears only after a healthy
+mount, and after mount an overlay appears and the mounted app is left alone. The real
+session proof (`delivery-server-ui-proof.mjs`) covers pairing, preview/media, restart recovery
+and the authenticated bundled fallback in delivery.md.
 
 Bootstrap requires an explicit HTTPS `reach.address`, an accepted OpenSSH public key in
 `bootstrap.hostKey`, and a pinned runtime digest in `t3.runtimeChecksums` before download.

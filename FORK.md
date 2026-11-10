@@ -141,6 +141,60 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `features/threads/ThreadFeed.tsx`, `lib/markdownLinks.ts`; `agent-kit/skills/t3/scripts/t3ctl.mjs`;
   `docs/mesh/README.md`.
 
+### 2026-11-10 — Drain ignores finished runs and repairs orphaned steps
+
+- **What.** A live update no longer waits forever for nodes left open by a run that ended weeks
+  ago. Drain admission counts a node only through its run or, for a runless node, while it is
+  recent; a terminal run closes its open todo lists, tool calls and input requests in the
+  projection. Existing databases get the same repair once at startup. The delivery target closes
+  admission immediately and polls status, so a long drain cannot hit the HTTP client timeout.
+- **How.** The drain query joins nodes to runs and bounds unowned nodes by their started time;
+  `run.updated` projection writes apply the kind-to-status map and complete todo-list plans;
+  migration `084_CloseTerminalRunNodes` performs the same idempotent repair and logs its count.
+- **Where.** `apps/server/src/mesh/DeliveryAdmission.ts`,
+  `apps/server/src/orchestration-v2/{ProjectionStore,TerminalRunNodes}.ts`,
+  `apps/server/src/persistence/Migrations/084_CloseTerminalRunNodes.ts`,
+  `scripts/delivery/target.mjs`.
+
+### 2026-11-09 — Desktop server UI: pairing, restart recovery and safe fallback
+
+- **What.** Desktop server UI can authenticate again. Its HTTP is first-party through the shell
+  proxy, so the pairing cookie survives; the proxy holds the session cookie and the bearer the
+  trusted bundled client hands over at selection, and the reduced renderer never sees either.
+  The server-UI origin uses a salt persisted once per install, so drafts survive restarts
+  (the window id remains per process; the main window is stable in practice). Only a recorded
+  main-frame navigation is a document, so sandboxed iframe previews/MCP apps cannot get
+  credentials, redirect the window or clear its source. WebSocket, preview streams and device
+  mirroring use short-lived RPC/media tickets minted through the same proxy, and credentialed
+  subresources carry a per-window proof header. If the server rejects the shell's credential, the bundled client opens
+  in its normal state (not the offline page) and connects through the saved bearer connection. A chunk or CSS preload failure during a server restart now shows
+  "Reconnecting to <machine>…" and reloads when the server answers, instead of the boot error.
+  A whole pairing link (including `t3code://pair?pairingUrl=`) can be pasted into the pairing
+  token field on web, Settings › Connections and mobile.
+- **How.** The server UI API base is its own renderer origin; the shell proxy captures
+  `Set-Cookie` into a per-window jar and injects credentials for proxied requests. `ui.select`
+  carries the credential from the trusted bundled client only, keeps it in memory, and never
+  persists it. A `/api/auth/session` preflight rejects a document whose injected credential does
+  not authenticate, and the bundled redirect carries `auth=1` so the normal app (not the offline
+  page) renders. `resolveDeviceHubAccess` mints a media ticket through the proxy and points
+  preview/device HTTP, EventSource and WebSocket traffic at the server with `wsTicket`. The
+  server CSP allows same-origin frames for HTML previews. `vite:preloadError` and chunk failures
+  install a reconnecting surface before mount and an overlay with reload after mount, with
+  "Use the built-in version"; the reload budget clears only after a healthy mount. `extractPairingCredential` and
+  `readPairingUrlInput` in shared/remote parse links before submission.
+- **Where.** `apps/desktop/src/electron/ElectronProtocol.ts`, `apps/desktop/src/app/DesktopUi.ts`,
+  `apps/desktop/src/ipc/{methods/ui,DesktopIpcHandlers,channels,rendererTrust}.ts`,
+  `apps/desktop/src/preload.ts`; web `components/desktop/{DesktopUiCoordinator,serverUiSource}.ts(x)`,
+  `components/auth/PairingRouteSurface.tsx`, `components/settings/ConnectionsSettings.logic.ts`,
+  `environments/primary/{target,desktopAuth}.ts`, `lib/serverUiReconnect.ts`, `bootstrap.ts`,
+  `components/desktop/desktopBundledFallback.ts`; client-runtime `platform/capabilities.ts`,
+  `connection/resolver.ts`, `state/deviceHubAccess.ts`; mobile
+  `features/connection/{pairing,ConnectionsNewRouteScreen}.ts(x)`; contracts
+  `desktopUi.ts`, `ipc.ts`; `packages/shared/src/remote.ts`;
+  `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/delivery.md`,
+
+  `docs/mesh/README.md`.
+
 ### 2026-11-09 — Environments screens speak mesh names
 
 - **What.** Every surface that names a server now follows one rule: a machine the mesh config lists
@@ -2309,3 +2363,27 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where:** `apps/web/src/components/workspaces/{MeshSettingsPanel,MachinesDialog,ForkThreadDialog}.tsx`,
   `apps/mobile/src/features/settings/SettingsMachinesRouteScreen.tsx`,
   `packages/shared/src/serverSettings.ts`, `apps/server/src/mesh/MeshAgentKit.ts`.
+
+### 2026-11-10 — One machine tag, and its look in the mesh config
+
+- **What:** Every machine tag on web and Android now comes from one component per client with one
+  look. The default is the phone's project-row look: the machine colour as bold uppercase text on
+  a light tint of that colour. The mesh config can change it with `appearance.machineTags`:
+  `style` is `tinted` (default), `solid` or `outline`, and `textColor` is `machine` (default) or
+  `neutral`. Text lightness moves with the theme while the hue stays, so pale and dark machine
+  colours stay readable in light and dark themes. Project strips draw every tag up to three
+  machines with `⇄` and truncate the project title instead; `+N` appears only from four machines
+  and names the hidden ones to assistive tech and on long-press.
+- **How:** `MachineTag.tsx` on each client resolves the appearance from the replicated
+  `SidebarWorkspacesConfig.appearance`; `packages/client-runtime/src/state/machineDisplay.ts`
+  owns `resolveMachineTagAppearance`, `machineTagPalette` and the contrast adjustment. The
+  contracts schema validates the fields, materialize broadcasts them with the layout, and no new
+  reconcile action is needed.
+- **Where:** `packages/contracts/src/{meshConfig,sidebarWorkspaces}.ts`,
+  `packages/shared/src/meshLayout/{materialize,registry}.ts`,
+  `packages/client-runtime/src/state/{machineDisplay,meshLayout/projectMachineStrip}.ts`,
+  `apps/web/src/components/workspaces/{MachineTag,ProjectMachineStrip}.tsx`,
+  `apps/mobile/src/features/workspaces/{MachineTag,ProjectMachineStrip,WorkspaceThreadLine,
+  WorkspaceChrome,FileMachineTag,MachinesSheet,DraftMachineCards}.tsx`, mobile
+  `features/connection/{ConnectionEnvironmentRow,PullRequestRoutingSettings}.tsx`, and
+  `agent-kit/skills/t3/SKILL.md`.

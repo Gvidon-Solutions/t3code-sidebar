@@ -188,6 +188,7 @@ const layerCapabilities = Layer.effectContext(
         ClientCapabilities.PrimaryEnvironmentAuth,
         ClientCapabilities.PrimaryEnvironmentAuth.of({
           bearerToken: Effect.succeed(Option.none()),
+          webSocketTicket: Effect.succeed(Option.none()),
         }),
       ),
       // The relay device id already persists in secure storage; analytics only sends its hash.

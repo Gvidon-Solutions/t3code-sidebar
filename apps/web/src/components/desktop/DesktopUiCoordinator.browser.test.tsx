@@ -11,7 +11,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { act, render, stubGlobal } from "../../../test/render";
 import { APP_VERSION } from "../../branding";
 import { DesktopUiVersionRow } from "../settings/DesktopUiVersionRow";
-import { DesktopUiCoordinator } from "./DesktopUiCoordinator";
+import { DesktopUiCoordinator, shouldRetryBundledSource } from "./DesktopUiCoordinator";
 
 const state = vi.hoisted(() => ({
   version: "studio-1",
@@ -45,6 +45,7 @@ vi.mock("../../state/environments", async () => {
 });
 vi.mock("../../composerDraftStore", () => ({
   DraftId: { make: (id: string) => id },
+  clearComposerDraftsEnvironment: vi.fn(),
   flushComposerDrafts: vi.fn(),
   useComposerDraftStore: (select: (store: { getDraftSession: () => undefined }) => unknown) =>
     select({ getDraftSession: () => undefined }),
@@ -181,4 +182,22 @@ it("follows connected thread servers and runtime changes, retaining the source i
   await expect
     .element(screen.getByText("https://cloudbox.example/ · server cloudbox-2"))
     .toBeVisible();
+});
+
+it("retries only a bundled source whose server-UI authentication failed", () => {
+  expect(
+    shouldRetryBundledSource({
+      source: "bundled",
+      reason: "Server UI authentication failed; using bundled client",
+    }),
+  ).toBe(true);
+  expect(
+    shouldRetryBundledSource({
+      source: "bundled",
+      reason: "This connection has no direct UI route; using bundled client",
+    }),
+  ).toBe(false);
+  expect(
+    shouldRetryBundledSource({ source: "server", reason: "Server UI authentication failed" }),
+  ).toBe(false);
 });

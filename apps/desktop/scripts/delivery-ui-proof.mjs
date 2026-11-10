@@ -96,10 +96,19 @@ async function main() {
             channel: Channels.UI_SERVER_ORIGIN_CHANNEL,
             handler: (event) => protocolService.serverOriginFor(event.sender.id),
           });
+          yield* ipc.handleSync({
+            channel: Channels.UI_SERVER_NAME_CHANNEL,
+            handler: () => Effect.succeed("Studio"),
+          });
+          yield* ipc.handleSync({
+            channel: Channels.UI_REQUEST_TOKEN_CHANNEL,
+            handler: () => Effect.succeed("proof-request-token"),
+          });
           yield* protocolService.trackWindow(window.webContents);
           yield* protocolService.registerDesktopProtocol({
             scheme: "t3code",
             assetDirectory: assets,
+            sourceSalt: "proof-salt",
             serverOrigin: async () => origin,
             connectionOrigins: async () => [origin.origin],
             clerkFrontendApiHostname: undefined,
@@ -110,6 +119,7 @@ async function main() {
             NodeAssert.equal(await evaluate("typeof window.desktopBridge"), "undefined");
             NodeAssert.equal(await evaluate("typeof window.desktopShell.revealWindow"), "function");
             NodeAssert.equal(await evaluate("window.desktopShell.origin"), origin.href);
+            NodeAssert.equal(await evaluate("window.desktopShell.name"), "Studio");
             for (const channel of privileged) {
               const refused = await evaluate(
                 `window.attack(${JSON.stringify(channel)}).then(()=>false,()=>true)`,

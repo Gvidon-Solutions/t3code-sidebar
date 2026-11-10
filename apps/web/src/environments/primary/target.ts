@@ -211,27 +211,45 @@ function resolveConfiguredPrimaryTarget(): PrimaryEnvironmentTarget | null {
 }
 
 function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
-  const url = parseTargetUrl({
-    rawValue: window.desktopShell?.origin ?? window.location.origin,
+  const pageOrigin = parseTargetUrl({
+    rawValue: window.location.href,
+    source: "window-origin",
+    urlKind: "window-location-url",
+  });
+  // The server UI keeps HTTP same-origin with its document so its session cookie and the
+  // shell's proxy stay first-party; only the socket keeps the server's own origin.
+  const serverUi = window.desktopShell?.origin;
+  const pageHttpOrigin = `${pageOrigin.protocol}//${pageOrigin.host}`;
+  const httpBaseUrl = `${pageHttpOrigin}/`;
+  const wsOrigin = parseTargetUrl({
+    rawValue: serverUi ?? pageHttpOrigin,
     source: "window-origin",
     urlKind: "http-base-url",
   });
-  const httpBaseUrl = url.toString();
-  if (url.protocol === "http:") {
-    url.protocol = "ws:";
-  } else if (url.protocol === "https:") {
-    url.protocol = "wss:";
+  // A t3code server UI inherits http(s) endpoints from the shell's server origin.
+  if (wsOrigin.protocol === "t3code:" || wsOrigin.protocol === "t3code-dev:") {
+    if (serverUi === undefined) {
+      throw new PrimaryEnvironmentProtocolUnsupportedError({
+        source: "window-origin",
+        protocol: wsOrigin.protocol,
+      });
+    }
+  }
+  if (wsOrigin.protocol === "http:") {
+    wsOrigin.protocol = "ws:";
+  } else if (wsOrigin.protocol === "https:") {
+    wsOrigin.protocol = "wss:";
   } else {
     throw new PrimaryEnvironmentProtocolUnsupportedError({
       source: "window-origin",
-      protocol: url.protocol,
+      protocol: wsOrigin.protocol,
     });
   }
   return {
     source: "window-origin",
     target: {
       httpBaseUrl,
-      wsBaseUrl: url.toString(),
+      wsBaseUrl: wsOrigin.toString(),
     },
   };
 }

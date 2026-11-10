@@ -220,8 +220,8 @@ const layerDesktopApplication = Layer.mergeAll(
   DesktopApplicationMenu.layer,
   DesktopLinuxUrlHandler.layer,
   DesktopCliCommand.layer,
-  layerDesktopSsh,
 ).pipe(
+  Layer.provideMerge(layerDesktopSsh),
   Layer.provideMerge(layerDesktopServerExposure),
   Layer.provideMerge(layerDesktopSnapShot),
   Layer.provideMerge(

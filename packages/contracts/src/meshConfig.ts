@@ -1,4 +1,5 @@
 import { PortNumber } from "./baseSchemas.ts";
+import { MachineTagAppearance } from "./sidebarWorkspaces.ts";
 import * as Schema from "effect/Schema";
 
 const open = <const F extends Schema.Struct.Fields>(fields: F) =>
@@ -21,6 +22,12 @@ const Policy = {
 };
 export const MeshConfigDocument = open({
   schema: Schema.Number,
+  /** Presentation choices every client of every machine reads from the replicated layout. */
+  appearance: Schema.optionalKey(
+    open({
+      machineTags: Schema.optionalKey(MachineTagAppearance),
+    }),
+  ),
   t3: Schema.optionalKey(
     open({
       version: Schema.optionalKey(ExactVersion),

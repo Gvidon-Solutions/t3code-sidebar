@@ -1,4 +1,8 @@
-import type { SidebarMachine, SidebarWorkspacesConfig } from "@t3tools/contracts";
+import type {
+  MachineTagAppearance,
+  SidebarMachine,
+  SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 
 import { workspaceColor } from "./sidebarWorkspaces.ts";
 
@@ -186,6 +190,147 @@ export function machineTagBackground(color: string, alpha = 0.14): string {
   if (!/^[0-9a-f]{6}$/i.test(full)) return `rgba(128, 128, 128, ${alpha})`;
   const value = Number.parseInt(full, 16);
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
+export type ResolvedMachineTagAppearance = {
+  readonly style: "tinted" | "solid" | "outline";
+  readonly textColor: "machine" | "neutral";
+};
+
+const DEFAULT_MACHINE_TAG_APPEARANCE: ResolvedMachineTagAppearance = {
+  style: "tinted",
+  textColor: "machine",
+};
+
+/**
+ * The mesh config's appearance with defaults applied. An absent field or an unknown value
+ * keeps the default look, so clients older than a newer config still draw a tag.
+ */
+export function resolveMachineTagAppearance(
+  config: Pick<SidebarWorkspacesConfig, "appearance"> | null | undefined,
+): ResolvedMachineTagAppearance {
+  const machineTags: MachineTagAppearance | undefined = config?.appearance?.machineTags;
+  const style = machineTags?.style;
+  const textColor = machineTags?.textColor;
+  return {
+    style: style === "solid" || style === "outline" ? style : DEFAULT_MACHINE_TAG_APPEARANCE.style,
+    textColor: textColor === "neutral" ? "neutral" : DEFAULT_MACHINE_TAG_APPEARANCE.textColor,
+  };
+}
+
+interface Rgb {
+  readonly red: number;
+  readonly green: number;
+  readonly blue: number;
+}
+
+const NEUTRAL_RGB: Rgb = { red: 128, green: 128, blue: 128 };
+
+function parseHexRgb(color: string): Rgb | null {
+  const hex = color.trim().replace(/^#/, "");
+  const full = /^[0-9a-f]{3}$/i.test(hex) ? [...hex].map((part) => part + part).join("") : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  const value = Number.parseInt(full, 16);
+  return { red: (value >> 16) & 255, green: (value >> 8) & 255, blue: value & 255 };
+}
+
+const toHex = ({ red, green, blue }: Rgb) =>
+  `#${[red, green, blue]
+    .map((channel) => Math.round(channel).toString(16).padStart(2, "0"))
+    .join("")}`;
+
+/** WCAG relative luminance of an sRGB colour, used only to keep tag text readable. */
+export function relativeLuminance({ red, green, blue }: Rgb): number {
+  const linear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
+}
+
+const scaleRgb = (rgb: Rgb, factor: number): Rgb => ({
+  red: rgb.red * factor,
+  green: rgb.green * factor,
+  blue: rgb.blue * factor,
+});
+const lightenRgb = (rgb: Rgb, amount: number): Rgb => ({
+  red: rgb.red + (255 - rgb.red) * amount,
+  green: rgb.green + (255 - rgb.green) * amount,
+  blue: rgb.blue + (255 - rgb.blue) * amount,
+});
+
+/** The minimum relative luminance that reads on a dark background. */
+const DARK_TEXT_MIN_LUMINANCE = 0.55;
+/** The maximum relative luminance that reads on a light background. */
+const LIGHT_TEXT_MAX_LUMINANCE = 0.18;
+
+function adjustTextLuminance(rgb: Rgb, theme: "light" | "dark"): Rgb {
+  const luminance = relativeLuminance(rgb);
+  if (theme === "light" && luminance > LIGHT_TEXT_MAX_LUMINANCE) {
+    let low = 0;
+    let high = 1;
+    for (let step = 0; step < 16; step += 1) {
+      const middle = (low + high) / 2;
+      if (relativeLuminance(scaleRgb(rgb, middle)) > LIGHT_TEXT_MAX_LUMINANCE) high = middle;
+      else low = middle;
+    }
+    return scaleRgb(rgb, low);
+  }
+  if (theme === "dark" && luminance < DARK_TEXT_MIN_LUMINANCE) {
+    let low = 0;
+    let high = 1;
+    for (let step = 0; step < 16; step += 1) {
+      const middle = (low + high) / 2;
+      if (relativeLuminance(lightenRgb(rgb, middle)) < DARK_TEXT_MIN_LUMINANCE) low = middle;
+      else high = middle;
+    }
+    return lightenRgb(rgb, high);
+  }
+  return rgb;
+}
+
+export interface MachineTagPalette {
+  /** Absent for the outline style. */
+  readonly backgroundColor: string | undefined;
+  /** Absent unless the outline style draws a border. */
+  readonly borderColor: string | undefined;
+  /** Machine-coloured text; absent means the client's normal foreground belongs there. */
+  readonly color: string | undefined;
+}
+
+/**
+ * The one palette for a machine tag. Tinted keeps the machine tint and coloured text; solid
+ * fills with the machine colour and picks black or white by contrast; outline keeps the
+ * background and draws a machine-coloured border. In either theme a machine colour that is
+ * too pale or too dark for the background is moved in lightness only, keeping its hue.
+ */
+export function machineTagPalette(
+  machineColor: string,
+  appearance: ResolvedMachineTagAppearance,
+  theme: "light" | "dark",
+): MachineTagPalette {
+  const rgb = parseHexRgb(machineColor) ?? NEUTRAL_RGB;
+  const text =
+    appearance.textColor === "machine" ? toHex(adjustTextLuminance(rgb, theme)) : undefined;
+  if (appearance.style === "solid") {
+    return {
+      backgroundColor: machineColor.trim() || toHex(NEUTRAL_RGB),
+      borderColor: undefined,
+      color: relativeLuminance(rgb) < 0.179 ? "#ffffff" : "#000000",
+    };
+  }
+  if (appearance.style === "outline") {
+    return {
+      backgroundColor: undefined,
+      borderColor: toHex(adjustTextLuminance(rgb, theme)),
+      color: text,
+    };
+  }
+  return {
+    backgroundColor: machineTagBackground(machineColor),
+    borderColor: undefined,
+    color: text,
+  };
 }
 
 export function shortMachineHost(url: string | null | undefined): string | null {

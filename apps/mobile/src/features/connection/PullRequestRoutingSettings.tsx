@@ -13,10 +13,8 @@ import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { environmentCatalog } from "../../connection/catalog";
-import {
-  environmentNameOf,
-  machineTagBackground,
-} from "@t3tools/client-runtime/state/machine-display";
+import { environmentNameOf } from "@t3tools/client-runtime/state/machine-display";
+import { MachineTag } from "../workspaces/MachineTag";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "../settings/components/SettingsSection";
@@ -70,14 +68,9 @@ export function PullRequestRoutingSettings() {
                 <View className="min-w-0 flex-1 gap-0.5">
                   <View className="flex-row items-center gap-1.5">
                     {name.tag.trim() ? (
-                      <View
-                        className="shrink-0 rounded px-1 py-0.5"
-                        style={{ backgroundColor: machineTagBackground(name.color) }}
-                      >
-                        <Text className="text-[10px] font-t3-bold uppercase text-foreground">
-                          {name.tag}
-                        </Text>
-                      </View>
+                      <MachineTag
+                        machine={{ label: name.label, tag: name.tag, color: name.color }}
+                      />
                     ) : null}
                     <Text className="min-w-0 text-base font-t3-bold text-foreground">
                       {name.label}

@@ -188,7 +188,11 @@ describe("runMigrations", () => {
         }
         assert.deepStrictEqual(
           (yield* runMigrations()).map(([id]) => id),
-          source === "upstream" ? [80, 81, 82, 83] : source === "receipts" ? [82, 83] : [83],
+          source === "upstream"
+            ? [80, 81, 82, 83, 84]
+            : source === "receipts"
+              ? [82, 83, 84]
+              : [83, 84],
         );
         assert.deepStrictEqual(yield* history, migrationManifest);
         assert.deepStrictEqual(yield* sql`SELECT COUNT(*) AS count FROM peer_session_identities`, [
@@ -240,7 +244,7 @@ describe("runMigrations", () => {
 
         assert.deepStrictEqual(
           (yield* runMigrations()).map(([id]) => id),
-          [77, 78, 79, 80, 81, 82, 83],
+          [77, 78, 79, 80, 81, 82, 83, 84],
         );
         assert.deepStrictEqual(yield* history, migrationManifest);
         assert.deepStrictEqual(yield* sql`SELECT value FROM mesh_layout_entries`, [

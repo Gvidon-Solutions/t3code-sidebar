@@ -1,13 +1,36 @@
 import { type DesktopUiInfo } from "@t3tools/contracts";
+import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { afterChatSendsSettled } from "../chat/draftSendState";
 import { DraftId, flushComposerDrafts, useComposerDraftStore } from "../../composerDraftStore";
+import { readDesktopPrimaryBearerToken } from "../../environments/primary/desktopAuth";
+import { readPreparedConnection } from "../../state/session";
 import {
   useEnvironments,
   useEnvironmentHttpBaseUrl,
   usePrimaryEnvironmentId,
 } from "../../state/environments";
+import { resolveServerUiSource } from "./serverUiSource";
+import { withoutBundledFallback } from "./desktopBundledFallback";
+
+export function shouldRetryBundledSource(
+  source: Pick<DesktopUiInfo, "source" | "reason">,
+): boolean {
+  return source.source === "bundled" && (source.reason?.includes("authentication failed") ?? false);
+}
+
+function serverUiSelectionUrl(httpBaseUrl: string, shellOrigin: string | undefined): string {
+  try {
+    const protocol = new URL(httpBaseUrl).protocol;
+    if (protocol === "t3code:" || protocol === "t3code-dev:") {
+      return shellOrigin ?? httpBaseUrl;
+    }
+  } catch {
+    // A malformed target is reported by the selection call; keep the value for that error.
+  }
+  return httpBaseUrl;
+}
 
 export function DesktopUiCoordinator() {
   const ui = window.desktopBridge?.ui ?? window.desktopShell?.ui;
@@ -20,6 +43,7 @@ export function DesktopUiCoordinator() {
   const primary = usePrimaryEnvironmentId();
   const { environments } = useEnvironments();
   const [remembered, setRemembered] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const requested = routeEnvironment ?? draftEnvironment;
   if (requested && requested !== remembered) setRemembered(requested);
   const selectedId =
@@ -54,26 +78,56 @@ export function DesktopUiCoordinator() {
     if (!ui || !loaded || !environmentId || !httpBaseUrl || !version) return;
     let active = true;
     let cancelReload: (() => void) | undefined;
-    void ui
-      .select({ environmentId, httpBaseUrl, serverVersion: version })
-      .then((changed) => {
-        if (active && changed) {
-          cancelReload = afterChatSendsSettled(() => {
-            if (!active) return;
-            try {
-              flushComposerDrafts();
-              window.location.reload();
-            } catch (error) {
-              console.error("Could not reload connected server UI", error);
-            }
-          });
+    void (async () => {
+      const trustedClient = window.desktopBridge !== undefined;
+      const sourceHttpBaseUrl = serverUiSelectionUrl(
+        httpBaseUrl,
+        window.desktopShell?.origin ?? undefined,
+      );
+      const primaryBearerToken =
+        trustedClient && environmentId === PRIMARY_LOCAL_ENVIRONMENT_ID
+          ? await readDesktopPrimaryBearerToken().catch((error) => {
+              console.warn("Could not read the desktop local credential", error);
+              return null;
+            })
+          : null;
+      const source = resolveServerUiSource({
+        environmentId,
+        httpBaseUrl: sourceHttpBaseUrl,
+        prepared: readPreparedConnection(environmentId),
+        primaryBearerToken,
+        trustedClient,
+      });
+      const changed = await ui.select({
+        environmentId,
+        httpBaseUrl: source.httpBaseUrl,
+        serverVersion: version,
+      });
+      if (!active) return;
+      if (!changed) {
+        // A rejected server UI is retried after its TTL; keep this bundled app polling
+        // so a plain document load can pick the server UI up again.
+        if (shouldRetryBundledSource(loaded) && environmentId !== null) {
+          const timer = setTimeout(() => setRetryNonce((value) => value + 1), 30_000);
+          cancelReload = () => clearTimeout(timer);
         }
-      })
-      .catch((error) => console.error("Could not select connected server UI", error));
+        return;
+      }
+      cancelReload = afterChatSendsSettled(() => {
+        if (!active) return;
+        try {
+          flushComposerDrafts();
+          window.location.assign(withoutBundledFallback(window.location.href));
+        } catch (error) {
+          console.error("Could not reload connected server UI", error);
+        }
+      });
+    })().catch((error) => console.error("Could not select connected server UI", error));
     return () => {
       active = false;
       cancelReload?.();
     };
-  }, [ui, loaded, environmentId, httpBaseUrl, version]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- retryNonce re-runs the source sync after the bundled retry timer
+  }, [ui, loaded, environmentId, httpBaseUrl, version, retryNonce]);
   return null;
 }

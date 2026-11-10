@@ -1,14 +1,12 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import {
-  machineTagBackground,
-  type MachineDisplay,
-} from "@t3tools/client-runtime/state/machine-display";
+import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import { View } from "react-native";
 
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
 import { QueuedMessageIcon } from "../threads/queued-message-icon";
+import { MachineTag } from "./MachineTag";
 
 /**
  * The vertical guide that ties a thread's agents to it. Agent rows sit inside
@@ -56,7 +54,7 @@ export function WorkspaceThreadLine(props: {
   return (
     <View
       className={cn(
-        "min-h-8 flex-row items-center gap-2.5 py-0.5 pr-5",
+        "min-h-[44px] flex-row items-center gap-2.5 pr-5",
         props.nested ? "pl-[48px]" : "pl-7",
       )}
     >
@@ -77,21 +75,12 @@ export function WorkspaceThreadLine(props: {
         ) : null}
       </View>
       {props.machineTag ? (
-        <View
-          accessible
+        <MachineTag
+          machine={props.machineTag}
+          muted={props.machineTagOffline}
           accessibilityLabel={`Machine: ${props.machineTag.label}${props.machineTagOffline ? ", offline" : ""}`}
-          className={cn("shrink-0 rounded px-1 py-0.5", props.machineTagOffline && "opacity-50")}
-          style={{ backgroundColor: machineTagBackground(props.machineTag.color) }}
-        >
-          <Text
-            className={cn(
-              "text-3xs font-t3-bold uppercase",
-              props.machineTagOffline ? "text-foreground-muted" : "text-foreground",
-            )}
-          >
-            {props.machineTag.tag}
-          </Text>
-        </View>
+          style={{ marginVertical: 2 }}
+        />
       ) : null}
       <Text
         className={cn(

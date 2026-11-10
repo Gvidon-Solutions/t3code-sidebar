@@ -24,6 +24,7 @@ vi.mock("react-native", () => {
     <div data-testid={testID}>{children}</div>
   );
   return {
+    useColorScheme: () => "light",
     View: Box,
     ScrollView: Box,
     Modal: ({ children, visible }: { children?: ReactNode; visible?: boolean }) =>
@@ -149,6 +150,7 @@ vi.mock("../../state/mesh-layout", () => ({ meshLayoutAtoms: {} }));
 vi.mock("../../state/peerLinks", () => ({ peerLinkEnvironment: {} }));
 vi.mock("./useMeshLayout", () => ({
   useMeshLayout: () => ({ state: { snapshot: { document: mocks.document } } }),
+  useMeshLayoutOptional: () => ({ config: null }),
 }));
 vi.mock("../../lib/modelOptions", () => ({
   buildModelOptions: () => mocks.models,

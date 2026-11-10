@@ -1,7 +1,11 @@
 import * as DateTime from "effect/DateTime";
 
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
-import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "@t3tools/shared/remote";
+import {
+  getPairingTokenFromUrl,
+  readPairingAppLink,
+  setPairingTokenOnUrl,
+} from "@t3tools/shared/remote";
 import { readHostedPairingRequest } from "../../hostedPairing";
 import {
   type ServerClientSessionRecord,
@@ -236,18 +240,31 @@ export function parseManualDesktopSshTarget(input: {
   };
 }
 
+function normalizePairingHost(value: string): string | null {
+  const raw = value.replace(/\s+/g, "").trim();
+  if (!raw) return null;
+  try {
+    return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`).origin;
+  } catch {
+    return null;
+  }
+}
+
 export function parsePairingUrlFields(
   input: string,
 ): { readonly host: string; readonly pairingCode: string } | null {
-  const trimmed = input.trim();
+  const trimmed = input.replace(/\s+/g, "");
   if (!trimmed) return null;
 
   try {
+    const appLink = readPairingAppLink(trimmed);
+    const value = appLink ?? trimmed;
     const urlLikeInput =
-      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
-        ? trimmed
-        : `https://${trimmed}`;
-    const url = new URL(urlLikeInput, window.location.origin);
+      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(value) || value.startsWith("//")
+        ? value
+        : `https://${value}`;
+    const base = typeof window !== "undefined" ? window.location.origin : "https://pairing.invalid";
+    const url = new URL(urlLikeInput, base);
     const hostedPairingRequest = readHostedPairingRequest(url);
     if (hostedPairingRequest) {
       return {
@@ -274,8 +291,24 @@ export function parseRemotePairingFields(input: {
   readonly host: string;
   readonly pairingCode: string;
 } {
-  const parsedPairingUrl = parsePairingUrlFields(input.host);
-  if (parsedPairingUrl) return parsedPairingUrl;
+  const hostLink = parsePairingUrlFields(input.host);
+  const codeLink = parsePairingUrlFields(input.pairingCode);
+  if (hostLink && codeLink) {
+    if (normalizePairingHost(hostLink.host) !== normalizePairingHost(codeLink.host)) {
+      throw new Error("The two fields name different servers. Keep one and paste only its token.");
+    }
+    return hostLink;
+  }
+  if (codeLink) {
+    const typedHost = normalizePairingHost(input.host);
+    if (typedHost !== null && typedHost !== normalizePairingHost(codeLink.host)) {
+      throw new Error(
+        "The pairing link names its own server. Clear the server field or paste only its token.",
+      );
+    }
+    return codeLink;
+  }
+  if (hostLink) return hostLink;
 
   const host = input.host.trim();
   const pairingCode = input.pairingCode.trim();

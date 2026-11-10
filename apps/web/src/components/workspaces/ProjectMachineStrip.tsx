@@ -14,15 +14,12 @@ const colors = {
 export function ProjectMachineStrip({
   model,
   onOpen,
-  compact = false,
 }: {
   model: ProjectMachineStripModel;
-  compact?: boolean;
   onOpen: () => void;
 }) {
   if (model.chips.length === 0) return null;
-  const chips = compact ? model.chips.slice(0, 1) : model.chips;
-  const overflow = model.overflow + model.chips.length - chips.length;
+  const hiddenLabels = model.hidden.map((chip) => chip.machine.label).join(", ");
   return (
     <Tooltip>
       <TooltipTrigger
@@ -39,7 +36,7 @@ export function ProjectMachineStrip({
           />
         }
       >
-        {chips.map((chip, index) => (
+        {model.chips.map((chip, index) => (
           <Fragment key={chip.environmentId}>
             {chip.role === "replica" && model.chips[index - 1]?.role !== "replica" ? (
               <span aria-hidden="true" className="text-3xs text-sidebar-muted-foreground">
@@ -61,7 +58,16 @@ export function ProjectMachineStrip({
             </MachineTag>
           </Fragment>
         ))}
-        {overflow > 0 ? <span className="text-3xs">+{overflow}</span> : null}
+        {model.overflow > 0 ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={<span aria-label={`Also on ${hiddenLabels}`} className="text-3xs" />}
+            >
+              +{model.overflow}
+            </TooltipTrigger>
+            <TooltipPopup>Also on {hiddenLabels}</TooltipPopup>
+          </Tooltip>
+        ) : null}
       </TooltipTrigger>
       <TooltipPopup>{model.description}</TooltipPopup>
     </Tooltip>

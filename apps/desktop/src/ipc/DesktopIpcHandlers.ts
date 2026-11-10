@@ -1,5 +1,10 @@
 import { ElectronProtocol } from "../electron/ElectronProtocol.ts";
-import { UI_SERVER_ORIGIN_CHANNEL } from "./channels.ts";
+import {
+  UI_REQUEST_TOKEN_CHANNEL,
+  UI_SERVER_NAME_CHANNEL,
+  UI_SERVER_ORIGIN_CHANNEL,
+} from "./channels.ts";
+import { DesktopUi } from "../app/DesktopUi.ts";
 import * as UiIpc from "./methods/ui.ts";
 import * as Effect from "effect/Effect";
 
@@ -88,13 +93,32 @@ import {
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
   const protocol = yield* ElectronProtocol;
+  const desktopUi = yield* DesktopUi;
   yield* ipc.handleSync({
     channel: UI_SERVER_ORIGIN_CHANNEL,
     handler: (event) => (event ? protocol.serverOriginFor(event.sender.id) : Effect.succeed(null)),
   });
+  yield* ipc.handleSync({
+    channel: UI_SERVER_NAME_CHANNEL,
+    handler: (event) => (event ? desktopUi.selectionLabel : Effect.succeed(null)),
+  });
+  yield* ipc.handleSync({
+    channel: UI_REQUEST_TOKEN_CHANNEL,
+    handler: (event) => {
+      if (!event) return Effect.succeed(null);
+      let host: string;
+      try {
+        host = new URL(event.senderFrame?.url ?? "").host;
+      } catch {
+        return Effect.succeed(null);
+      }
+      return protocol.serverUiRequestTokenFor(host);
+    },
+  });
   yield* installNotificationBadge();
   yield* ipc.handle(UiIpc.select);
   yield* ipc.handle(UiIpc.getInfo);
+  yield* ipc.handle(UiIpc.retryServerUi);
   yield* PreviewIpc.installPreviewEventForwarding();
 
   yield* ipc.handle(AppActivationIpc.setReady);

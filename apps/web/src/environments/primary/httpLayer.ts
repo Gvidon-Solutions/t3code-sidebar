@@ -22,11 +22,15 @@ function withPrimaryBearerToken(client: HttpClient.HttpClient): HttpClient.HttpC
   return client.pipe(
     HttpClient.mapRequestEffect((request) =>
       Effect.promise(readDesktopPrimaryBearerToken).pipe(
-        Effect.map((bearerToken) =>
-          bearerToken ? HttpClientRequest.bearerToken(request, bearerToken) : request,
-        ),
+        Effect.map((bearerToken) => {
+          return bearerToken ? HttpClientRequest.bearerToken(request, bearerToken) : request;
+        }),
       ),
     ),
+    HttpClient.mapRequest((request) => {
+      const token = window.desktopShell?.requestToken;
+      return token ? HttpClientRequest.setHeader(request, "x-t3-server-ui", token) : request;
+    }),
   );
 }
 

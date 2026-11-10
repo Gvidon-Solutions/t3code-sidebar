@@ -22,6 +22,9 @@ vi.mock("../ipc/DesktopIpcHandlers.ts", () => ({
 }));
 vi.mock("../updates/DesktopRemoteUpdates.ts", () => ({ listen: Effect.void }));
 vi.mock("./DesktopStartupRecovery.ts", () => ({ listen: Effect.void }));
+vi.mock("./DesktopUiOriginSalt.ts", () => ({
+  loadServerUiOriginSalt: () => Effect.succeed("test-install-salt"),
+}));
 
 import * as DesktopApp from "./DesktopApp.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
@@ -70,6 +73,13 @@ import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as MacPermissions from "../permissions/MacPermissions.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 
+it("keeps the explicit UI URL override ahead of a local or saved source", () => {
+  const configured = new URL("https://configured.example/");
+  const selected = new URL("https://selected.example/");
+  assert.strictEqual(DesktopApp.preferConfiguredUiOrigin(configured, selected), configured);
+  assert.strictEqual(DesktopApp.preferConfiguredUiOrigin(null, selected), selected);
+});
+
 it.effect(
   "starts the backend and window without waiting on the Linux URL handler the fork skips",
   () =>
@@ -102,6 +112,7 @@ it.effect(
             platform: "linux",
             isDevelopment: false,
             isPackaged: true,
+            stateDir: "/tmp/t3-desktop-app-test",
             configuredBackendPort: Option.some(3773),
             defaultDesktopSettings: { serverExposureMode: "local-only" },
           } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]),
@@ -155,6 +166,10 @@ it.effect(
               selectionLabel: Effect.succeed(null),
               connectionOrigins: Effect.succeed([]),
               select: () => Effect.succeed(false),
+              sourceOrigin: Effect.succeed(null),
+              serverAuthorization: () => Effect.succeed(null),
+              noteAuthorizationRejected: () => Effect.void,
+              retryServerUi: Effect.void,
               recordSource: () => Effect.void,
               getInfo: Effect.succeed({
                 source: "bundled",

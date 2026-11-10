@@ -7,10 +7,7 @@ import {
   sortRepresentationsMainFirst,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
-import {
-  machineDisplayOf,
-  machineTagBackground,
-} from "@t3tools/client-runtime/state/machine-display";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import type {
   ReplicaLiveStatus,
   SidebarProjectMount,
@@ -19,6 +16,7 @@ import type {
 import { Pressable, ScrollView, View } from "react-native";
 
 import { Sheet } from "../../components/ui/Sheet";
+import { MachineTag } from "./MachineTag";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,18 +28,7 @@ function ReplicaTag(props: {
   readonly tag: string;
   readonly color: string;
 }) {
-  return (
-    <View
-      accessible
-      accessibilityLabel={`Machine: ${props.label}`}
-      className="h-4 items-center justify-center rounded px-1"
-      style={{ backgroundColor: machineTagBackground(props.color) }}
-    >
-      <Text className="font-mono text-[10px] font-t3-bold uppercase text-foreground">
-        {props.tag}
-      </Text>
-    </View>
-  );
+  return <MachineTag machine={{ label: props.label, tag: props.tag, color: props.color }} />;
 }
 
 /** Fork: the phone's "Machines…" sheet for one logical project. */

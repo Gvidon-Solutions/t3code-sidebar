@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("react-native", () => ({
+  useColorScheme: () => "light",
   View: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Pressable: ({ children, onPress }: { children?: ReactNode; onPress?: () => void }) => (
     <button onClick={onPress}>{children}</button>
@@ -43,6 +44,7 @@ vi.mock("@effect/atom-react", async (original) => ({
 }));
 vi.mock("../workspaces/useMeshLayout", () => ({
   useMeshLayout: () => ({ config: mocks.config }),
+  useMeshLayoutOptional: () => ({ config: mocks.config }),
 }));
 
 import { PullRequestRoutingSettings } from "./PullRequestRoutingSettings";

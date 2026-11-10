@@ -23,7 +23,7 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 import { AppText as Text, AppTextInput, type AppTextInputProps } from "../../components/ui/AppText";
 import { FrostedCutout } from "../../components/ui/FrostedCutout";
-import { buildPairingUrl, extractPairingUrlFromQrPayload, parsePairingUrl } from "./pairing";
+import { extractPairingUrlFromQrPayload, parsePairingUrl, resolvePairingInput } from "./pairing";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
@@ -156,7 +156,13 @@ function PairingForm({
   };
 
   const handleSubmit = async () => {
-    const pairingUrl = buildPairingUrl(hostInput, codeInput);
+    let pairingUrl: string;
+    try {
+      pairingUrl = resolvePairingInput(hostInput, codeInput);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Check the pairing link.");
+      return;
+    }
     setOwnAttempt(true);
     setSubmitError(null);
     setIsSubmitting(true);

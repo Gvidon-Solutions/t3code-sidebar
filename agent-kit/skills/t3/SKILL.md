@@ -80,6 +80,8 @@ machines:
     aliases: [desk]
     reach: auto           # auto | { address: https://host:port } | { via: other-slug }
     ssh: { user: dev, port: 22 }
+appearance:
+  machineTags: { style: tinted, textColor: machine }  # every client, every machine
 links:
   default: { files: projects, replicas: true, threads: true }  # files: all|projects|none
   overrides: [{ between: [studio, laptop], files: all }]
@@ -93,6 +95,8 @@ replicas:
 agents:
   aliases: { 1017: { harness: opencode, model: deepseek/deepseek-flash } }
 ```
+
+`appearance.machineTags.style` is `tinted` (default: the machine colour as text on a light tint), `solid` (filled with the machine colour) or `outline` (machine-coloured border and text). `appearance.machineTags.textColor` is `machine` (default) or `neutral` (the theme's normal text); solid always chooses contrasting black or white. Every client applies it once the layout replicates, so all machines show the same tags. Unknown styles or text colours are rejected by plan/apply.
 
 Commands: `mesh config get`, `mesh config plan --file c.yaml`, `mesh config apply --file c.yaml [--base REV]`, `mesh config rollback REV`, `mesh config history`. Apply is optimistic: pass the revision it was based on, or let the CLI read the current one. A stale base is refused with a path diff. `mesh status` shows every action per server as done, in progress or failed with the reason. Files permission defaults to `projects`; `all` lets a linked peer read any file this server's user can read; `none` refuses. A read-only link is always limited to project folders. New machines are bound to their environment id when they join; do not type environment ids in the config.
 
