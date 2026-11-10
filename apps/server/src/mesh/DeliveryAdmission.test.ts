@@ -154,6 +154,116 @@ it.effect("deadline keeps a long active turn running and reopens admission", () 
   }).pipe(Effect.provide(layer)),
 );
 
+it.effect("ignores open nodes whose run finished and stale standalone nodes", () =>
+  Effect.gen(function* () {
+    const admission = yield* Admission.DeliveryAdmission;
+    const sql = yield* SqlClient.SqlClient;
+    const now = yield* DateTime.now;
+    const requestedAt = DateTime.formatIso(now);
+    const old = DateTime.formatIso(
+      DateTime.makeUnsafe(DateTime.toEpochMillis(now) - 2 * 60 * 60 * 1000),
+    );
+    const insertRun = (runId: string, status: string, ordinal: number) =>
+      sql`
+        INSERT INTO orchestration_v2_projection_runs (
+          run_id, thread_id, ordinal, provider, provider_thread_id, status,
+          requested_at, completed_at, payload_json
+        ) VALUES (
+          ${runId}, 'thread:drain-nodes', ${ordinal}, 'codex', NULL, ${status},
+          ${requestedAt}, ${status === "running" ? null : requestedAt},
+          ${JSON.stringify({ id: runId })}
+        )
+      `;
+    const insertNode = (input: {
+      readonly id: string;
+      readonly runId: string | null;
+      readonly kind: string;
+      readonly status: string;
+      readonly startedAt: string;
+    }) =>
+      sql`
+        INSERT INTO orchestration_v2_projection_nodes (
+          node_id, thread_id, run_id, parent_node_id, root_node_id, kind, status,
+          provider_thread_id, provider_turn_id, started_at, completed_at, payload_json
+        ) VALUES (
+          ${input.id}, 'thread:drain-nodes', ${input.runId}, NULL, 'node:root',
+          ${input.kind}, ${input.status}, NULL, NULL, ${input.startedAt}, NULL,
+          ${JSON.stringify({ id: input.id, status: input.status })}
+        )
+      `;
+
+    yield* insertRun("run:completed", "completed", 1);
+    yield* insertRun("run:interrupted", "interrupted", 2);
+    yield* insertNode({
+      id: "node:todo",
+      runId: "run:completed",
+      kind: "todo_list",
+      status: "running",
+      startedAt: old,
+    });
+    yield* insertNode({
+      id: "node:tool-running",
+      runId: "run:interrupted",
+      kind: "tool_call",
+      status: "running",
+      startedAt: old,
+    });
+    yield* insertNode({
+      id: "node:tool-pending",
+      runId: "run:interrupted",
+      kind: "tool_call",
+      status: "pending",
+      startedAt: old,
+    });
+    yield* insertNode({
+      id: "node:input",
+      runId: "run:completed",
+      kind: "user_input_request",
+      status: "waiting",
+      startedAt: old,
+    });
+    const orphaned = yield* admission.drain({
+      requestId: "orphan-nodes",
+      deadlineMs: 1000,
+      now: true,
+    });
+    assert.equal(orphaned.phase, "drained");
+    assert.equal(orphaned.activeRuns, 0);
+    yield* admission.cancel("orphan-nodes");
+
+    yield* insertNode({
+      id: "node:standalone-old",
+      runId: null,
+      kind: "subagent",
+      status: "running",
+      startedAt: old,
+    });
+    const staleStandalone = yield* admission.drain({
+      requestId: "stale-standalone",
+      deadlineMs: 1000,
+      now: true,
+    });
+    assert.equal(staleStandalone.phase, "drained");
+    yield* admission.cancel("stale-standalone");
+
+    yield* insertNode({
+      id: "node:standalone-recent",
+      runId: null,
+      kind: "subagent",
+      status: "running",
+      startedAt: DateTime.formatIso(DateTime.makeUnsafe(DateTime.toEpochMillis(now) - 5 * 60_000)),
+    });
+    const liveStandalone = yield* admission.drain({
+      requestId: "live-standalone",
+      deadlineMs: 1000,
+      now: true,
+    });
+    assert.equal(liveStandalone.phase, "draining");
+    assert.equal(liveStandalone.activeRuns, 1);
+    yield* admission.cancel("live-standalone");
+  }).pipe(Effect.provide(layer)),
+);
+
 it.effect(
   "preserves accepted starts across restart and delivers once cancellation opens admission",
   () =>
