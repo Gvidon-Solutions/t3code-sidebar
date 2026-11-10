@@ -109,6 +109,32 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-10 — Desktop UI source follow-ups from the W3 audit
+
+- **What.** The offline page's "Choose another server" keeps `bundled=1` and drops only the
+  server address, so opening Settings from a newer-but-down server stays in the bundled app and
+  leaving Settings cannot loop back to the offline page. A bundled-only environment switch no
+  longer reloads the window: `ui.select` returns "reload" only when the loaded source or a
+  server UI version changes. The UI source and its credential are tracked per renderer/origin, so
+  another window selecting its own environment no longer withholds the first window's source or
+  Authorization. Mesh reachability counts only a live connection, a fresh exchange (two minutes)
+  or a linked peer that is itself live; a stale or merely configured link no longer un-dims a
+  tag or names an "Available through" path. Settings › Mesh hides its connect-all action in the
+  reduced server UI too.
+- **How.** `desktopBundledLocalSettingsUrl` keeps the bundled flag; `DesktopUi` keeps
+  `rendererSelections` and `authorizedOrigins` maps, gates each origin on its own version and
+  returns whether the document changed; `sourceOriginFor(rendererId)` reads the window's
+  selection. `meshMachineReachable` takes the peer list plus a freshness clock and is used by
+  cards, tags, draft status and `MeshSettingsPanel`.
+- **Where.** `apps/web/src/components/desktop/desktopBundledFallback.ts`,
+  `apps/desktop/src/app/DesktopUi.ts`, `apps/desktop/src/app/DesktopApp.ts`,
+  `apps/desktop/src/electron/ElectronProtocol.ts`, `apps/desktop/src/ipc/methods/ui.ts`,
+  `packages/client-runtime/src/state/meshMachines.ts`,
+  `apps/web/src/components/chat/DraftMachineCards.tsx`,
+  `apps/web/src/components/workspaces/MeshSettingsPanel.tsx`,
+  `apps/web/src/hooks/useLogicalProjectEnvironments.ts`,
+  `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/mesh/README.md`.
+
 ### 2026-11-10 — Desktop keeps the built-in client unless the server UI is newer
 
 - **What.** The desktop no longer replaces its bundled client with the server's own UI just

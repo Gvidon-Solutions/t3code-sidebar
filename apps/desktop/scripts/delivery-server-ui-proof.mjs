@@ -677,7 +677,10 @@ async function main() {
               }
               const trusted =
                 event?.senderFrame?.url !== undefined && isBundledUiUrl(event.senderFrame.url);
-              return activeUi.select(selection, { trustedClient: trusted });
+              return activeUi.select(selection, {
+                trustedClient: trusted,
+                rendererId: event?.sender?.id,
+              });
             },
           });
           yield* ipc.handle({
@@ -744,8 +747,10 @@ async function main() {
             scheme: "t3code",
             assetDirectory: assets,
             sourceSalt: "proof-salt",
-            serverOrigin: async () =>
-              useRealUi ? await Effect.runPromise(activeUi.sourceOrigin) : serverOriginUrl,
+            serverOrigin: async (rendererId) =>
+              useRealUi
+                ? await Effect.runPromise(activeUi.sourceOriginFor(rendererId ?? null))
+                : serverOriginUrl,
             serverName: async () => {
               if (!useRealUi) return serverName;
               return (await Effect.runPromise(activeUi.selectionLabel)) ?? serverName;
@@ -1057,6 +1062,53 @@ async function main() {
             await sleep(500);
             await screenshot("05-offline-fallback.png");
 
+            // (c2) The Settings escape keeps the bundled origin, so it cannot bounce
+            // back to the same down server.
+            const chooseHref = await evaluate(
+              `document.querySelector('a[href*="#/settings/connections"]')?.href ?? null`,
+            );
+            NodeAssert.ok(chooseHref, "the offline page offers Choose another server");
+            const chooseUrl = new URL(chooseHref);
+            NodeAssert.equal(chooseUrl.searchParams.get("bundled"), "1");
+            NodeAssert.equal(chooseUrl.searchParams.get("server"), null);
+            await window.loadURL(chooseHref);
+            await waitFor(
+              "bundled settings from the offline page",
+              async () => {
+                const text = await bodyText();
+                return (
+                  window.webContents.getURL().startsWith("t3code://app/") &&
+                  text.includes("Connections") &&
+                  !text.includes("Can't reach") &&
+                  !text.includes("Loading")
+                );
+              },
+              60_000,
+            );
+            await sleep(1_500);
+            await screenshot("10-offline-settings-escape.png");
+            const leaveUrl = new URL(chooseHref);
+            leaveUrl.hash = "/";
+            await window.loadURL(leaveUrl.toString());
+            await waitFor(
+              "bundled app after leaving offline settings",
+              async () => {
+                const text = await bodyText();
+                return (
+                  window.webContents.getURL().startsWith("t3code://app/") &&
+                  !text.includes("Make sure it is running, then try again")
+                );
+              },
+              60_000,
+            );
+            console.log(
+              JSON.stringify({
+                phase: "offline-settings-escape",
+                bundled: true,
+                offlinePage: false,
+              }),
+            );
+
             server = startServer(baseDir, httpPort, binDir, studioHome);
             await waitFor(
               "server restarted for the auth check",
@@ -1151,6 +1203,7 @@ async function main() {
         "| 07-equal-bundled.png | Equal client and server versions keep the bundled client; both saved machines (studio and cloudbox) are connected and their projects show |",
         "| 08-local-off-bundled.png | Local environment off, one saved connection toggled off, two connected: the stale bundled flag after Settings renders the normal bundled app, not the offline page |",
         "| 09-newer-server-ui-mesh.png | The server UI is newer, so the desktop uses it; its new-thread cards say cloudbox is available through the mesh (studio), never 'Not connected here', and there is no connect-all prompt |",
+        "| 10-offline-settings-escape.png | A newer saved server is down; Choose another server keeps bundled=1 and opens bundled Settings, and leaving Settings stays in the bundled app instead of looping to the offline page |",
         "| 01-paired-app-shell.png | Server UI paired through the shell proxy; app shell rendered |",
         "| 02-html-preview.png | A media ticket opens a preview socket; an HTML preview iframe renders in server UI and its POST reaches the proxy with no Authorization or cookie |",
         "| 03-reconnecting.png | Chunk load failed during a server restart; a calm reconnecting overlay appears without touching the mounted app |",

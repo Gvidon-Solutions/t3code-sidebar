@@ -87,10 +87,12 @@ versions keep the bundled client and its saved connections, and the choice is re
 every launch and on a server version change. A disabled saved connection, an unknown environment
 and the local backend while it is off are not sources at all; they resolve to the bundled client.
 The `app/DesktopUi.ts` service validates saved origins, owns that version and usability decision,
-and persists the choice; `ipc/methods/ui.ts` accepts only the main application frame. Web's
-`DesktopUiCoordinator` waits for in-flight sends (including server-drain retries), then flushes
-drafts before reloading for a source/version change; About shows UI/shell versions and actual
-source.
+and persists the choice; it also keeps the source and credential per renderer/origin so another
+window selecting its own environment cannot change this window. `ipc/methods/ui.ts` accepts only
+the main application frame. Web's `DesktopUiCoordinator` waits for in-flight sends (including
+server-drain retries), then flushes drafts before reloading for a source/version change; a
+bundled-only environment switch is persisted without a reload. About shows UI/shell versions and
+actual source.
 `ElectronProtocol.ts` pins assets to their document's server, strips local credentials and
 compressed-response transport headers, and loads the bundled copy when the document is offline.
 Relay-only connections without a direct UI route explicitly use the bundled UI. Never mix
@@ -263,13 +265,15 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   reachability comes from mesh peer state, not this client's connections, so a machine the
   mesh reaches says "Available through <machine>" instead of "not connected". Sidebar project
   tags use the same `meshMachineReachable` rule: only a machine the mesh reports offline is
-  dimmed. The composer no longer carries a machine chip; a started thread names the machine in
+  dimmed. Reachability needs a live direct/relayed connection, a fresh exchange (two minutes) or
+  a linked peer that is itself live; a stale or merely configured link does not count. The composer no longer carries a machine chip; a started thread names the machine in
   its header. A lite
   replica never offers Initialize Git in the right panel: `chat/threadDetailsGit.ts` hides
   Version Control there, because git lives on the main copy. First run with an incomplete mesh
   shows one dismissible "Connect to all machines in your mesh" prompt; it switches saved
   connections back on and sends never-added machines to Connections. The reduced desktop server
-  UI never shows that prompt: it has no saved connections there and cannot act on them. Project rows draw one tag
+  UI never shows that prompt or the Settings › Mesh connect-all action: it has no saved
+  connections there and cannot act on them. Project rows draw one tag
   per machine; copies on machines this client is not connected to are dimmed in the same strip.
   A linked thread's header shows its machine tag only, never a peer label or environment id.
   The composer voice toggle follows the thread's provider on its own machine and, for a draft,
@@ -336,9 +340,10 @@ Shared client-runtime decisions keep web and Android answering these questions t
   fallback URL; web `desktopBundledFallback.ts` reads it and `DesktopBundledOffline` draws
   "Can't reach <server> — Retry". The offline page requires a known direct server: a bundled URL
   with no server is the normal bundled client, never an outage. Retry drops `bundled` so the
-  shell tries the saved server again, and "Choose another server" drops the same flags so leaving
-  Settings does not loop back into the page. The label falls back to the address for an unnamed
-  IP machine. The dev target-origin path also returns a plain retry page instead of dying.
+  shell tries the saved server again. "Choose another server" keeps `bundled=1` and drops only
+  the address, so Settings stays bundled while a server is down and leaving Settings cannot loop
+  back into the page. The label falls back to the address for an unnamed IP machine. The dev
+  target-origin path also returns a plain retry page instead of dying.
 - **Home and draft choice.** mobile `useSidebarWorkspaces` applies client-runtime
   `withImplicitWorkspace`, so a mesh with machines but no configured workspaces still shows one
   "Personal" folder list. Card wording separates a scratch draft (`draftHasProject: false`, no
@@ -1360,7 +1365,8 @@ Desktop server UI uses a separate `t3code://server-<webContentsId>-<source hash>
 `desktopShell` bridge. The shell serves it only while its server version is strictly newer than the
 bundled client; an equal, older or unknown version, a disabled/unknown connection and the local
 backend while off all keep the bundled origin. Storage is also separated when the selected server
-changes. It cannot read desktop credentials, catalogs, legacy storage, SSH,
+changes. The source and credential are tracked per window/origin: each server-UI window keeps its
+own document and bearer while another window selects a different environment. It cannot read desktop credentials, catalogs, legacy storage, SSH,
 exposure controls or media IPC. Server UI navigation and popup attempts cannot launch native external handlers. Every IPC entry checks the sender's top frame and current
 application origin. Protocol routing tracks main-frame navigation events because Electron's
 Fetch Request does not retain navigation mode; an HTML Accept header never changes the
