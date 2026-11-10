@@ -2596,3 +2596,30 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   threadForkNavigation,ThreadFeed,ThreadComposer,ThreadDetailScreen,ThreadRouteScreen},
   state/{mediaActions,use-thread-composer-state,use-composer-drafts},connection/
   environment-cache-store.test.ts}`; tests in `apps/mobile/src/**/*.test.ts(x)`.
+
+### 2026-11-10 — Dictation on a chosen machine, beside voice conversations
+
+- **What:** Upstream v0.1.8's dictation is available in our web and Android apps. Settings › Voice
+  chooses where transcription runs: This device, a paired machine with an installed model, or a
+  cloud provider with the user's own key (OpenAI, Grok, OpenRouter). The model list installs and
+  selects Parakeet, Whisper and Moonshine models on that machine, and the first dictation walks
+  through model setup. Android records while a local recognizer streams (Android 12+). Voice
+  conversations keep the audio-lines toggle, `/voice`, "Talk" and their own settings; the
+  composer's mic is dictation and the waveform is the conversation, and the single microphone
+  session serialises them.
+- **How:** The merged server speech layer (`SpeechService`, `SpeechModelStore`, `CloudSpeech`,
+  `catalog.json`) and `@t3tools/handy` models are unchanged. Web takes upstream's
+  `speech/useEnvironmentSpeechInput`, `ComposerSpeechButton` and `VoiceSettingsPanel` beside our
+  `ComposerVoiceToggle`. Mobile ports upstream's `voice-input/voiceDestination.ts` grant (device +
+  paired environment + cloud), `environmentTranscriber.ts` PCM upload and `voiceGrantStorage.ts`,
+  plus the native `voiceRecorder.*`/`voiceTranscription.*` live recorder and iOS preferred-locale
+  list; our microphone settings page became Settings › Voice and gained the destination, model
+  and cloud sections. `ListRowLayout`/`ListChoiceRow` regained optional `leading`/`meta` and `Sheet`
+  gained `dismissDisabled` for the model rows and cloud sheet.
+- **Where:** `apps/web/src/speech/*`, `apps/web/src/components/chat/{ComposerSpeechButton,
+  ComposerVoiceToggle,VoiceInputPill,VoiceInputSetup}.tsx`, `apps/web/src/components/settings/
+  {VoiceSettingsPanel,CloudVoiceConfiguration,MicrophoneTest}.tsx`, `apps/web/src/routes/
+  _chat.settings.voice.tsx`; `apps/mobile/src/features/voice-input/*`,
+  `apps/mobile/src/native/{voiceRecorder*,voiceTranscription*}`, `apps/mobile/src/features/settings/
+  {SettingsVoiceRouteScreen,SettingsVoiceModelsRouteScreen,VoiceModelSection,CloudVoiceSection}.tsx`,
+  `apps/mobile/src/lib/formatBytes.ts`, `apps/mobile/src/Stack.tsx`.

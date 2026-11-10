@@ -18,7 +18,9 @@ export function Sheet(props: SheetProps) {
   const sheetColor = StyleSheet.flatten(containerStyle)?.backgroundColor;
   const screenId = useId();
   const [isOpen, setIsOpen] = useState(true);
-  const close = () => setIsOpen(false);
+  const close = () => {
+    if (!props.dismissDisabled) setIsOpen(false);
+  };
 
   return (
     <FormSheet
@@ -28,6 +30,7 @@ export function Sheet(props: SheetProps) {
       // The header holds the close button, so the Duo needs no rail inside this sheet.
       prefersHorizontalBars
       nativeContainerStyle={containerStyle}
+      preventNativeDismiss={props.dismissDisabled}
       onDismiss={props.onClose}
       onNativeDismiss={props.onClose}
     >

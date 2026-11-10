@@ -118,7 +118,8 @@ import {
 } from "./features/settings/ScheduledTaskPickerScreens";
 import { SettingsKeyboardRouteScreen } from "./features/settings/SettingsKeyboardRouteScreen";
 import { SettingsLegalRouteScreen } from "./features/settings/SettingsLegalRouteScreen";
-import { SettingsMicrophoneRouteScreen } from "./features/settings/SettingsMicrophoneRouteScreen";
+import { SettingsVoiceModelsRouteScreen } from "./features/settings/SettingsVoiceModelsRouteScreen";
+import { SettingsVoiceRouteScreen } from "./features/settings/SettingsVoiceRouteScreen";
 import {
   SettingsOpenSourceLicenseRouteScreen,
   SettingsOpenSourceLicensesRouteScreen,
@@ -380,13 +381,28 @@ const SETTINGS_SCREENS = {
       title: "Keyboard",
     },
   }),
-  SettingsMicrophone: createNativeStackScreen({
-    screen: SettingsMicrophoneRouteScreen,
-    linking: "settings/microphone",
+  SettingsVoice: createNativeStackScreen({
+    screen: SettingsVoiceRouteScreen,
+    linking: { path: "settings/voice", alias: ["settings/microphone"] },
     options: {
       ...SETTINGS_PAGE_OPTIONS,
-      title: "Microphone",
+      title: "Voice",
     },
+  }),
+  SettingsVoiceModels: createNativeStackScreen({
+    screen: SettingsVoiceModelsRouteScreen,
+    // Android pushes it like the branch picker; a formSheet there leaves the list's header
+    // peeking above it once the keyboard opens.
+    options:
+      Platform.OS === "android"
+        ? { presentation: "card", headerShown: false }
+        : {
+            ...DETAIL_HEADER_OPTIONS,
+            ...HORIZONTAL_FORM_SHEET_OPTIONS,
+            sheetAllowedDetents: formSheetDetents(0.75),
+            sheetGrabberVisible: true,
+            headerBackVisible: false,
+          },
   }),
   SettingsFollowUp: createNativeStackScreen({
     screen: SettingsFollowUpRouteScreen,
