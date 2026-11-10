@@ -62,7 +62,6 @@ import {
 import { useParams, useRouter } from "@tanstack/react-router";
 import {
   AudioLinesIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   EllipsisIcon,
   FolderPlusIcon,
@@ -876,17 +875,6 @@ export default function WorkspaceSidebar() {
       ...current,
       [key]: { logicalKey, environmentId },
     }));
-  };
-  const openNewThreadOnMenu = async (folder: FolderModel, position: { x: number; y: number }) => {
-    const api = readLocalApi();
-    if (!api) return;
-    const clicked = await api.contextMenu.show(
-      machineMenuItems(machineChoicesFor(folder)),
-      position,
-    );
-    if (clicked?.startsWith("machine:")) {
-      startThreadOnMachine(folder, clicked.slice("machine:".length));
-    }
   };
   const addReplicaOn = (folder: FolderModel, environmentId: string) => {
     const plan = planThreadOnMachine({
@@ -1736,12 +1724,6 @@ export default function WorkspaceSidebar() {
                     onClick={() => startThreadInFolder(folder)}
                   >
                     <SquarePenIcon />
-                  </FolderAction>
-                  <FolderAction
-                    label="New thread on another machine"
-                    onClick={(position) => void openNewThreadOnMenu(folder, position)}
-                  >
-                    <ChevronDownIcon />
                   </FolderAction>
                   <FolderAction
                     label="Project actions"
