@@ -19,6 +19,18 @@ describe("loadServerUiOriginSalt", () => {
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("falls back to an in-memory salt when the state directory is unwritable", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped();
+      const stateDir = path.join(root, "not-a-directory");
+      yield* fs.writeFileString(stateDir, "file");
+      const salt = yield* loadServerUiOriginSalt(stateDir);
+      expect(salt).toMatch(/^[a-f0-9]{48}$/);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("replaces an invalid salt file", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

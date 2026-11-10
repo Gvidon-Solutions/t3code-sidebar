@@ -16,11 +16,21 @@ export const loadServerUiOriginSalt = Effect.fn("loadServerUiOriginSalt")(functi
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = path.join(stateDir, SALT_FILE);
-  const existing = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => ""));
-  const trimmed = existing.trim();
-  if (/^[a-f0-9]{32,}$/i.test(trimmed)) return trimmed;
-  const salt = NodeCrypto.randomBytes(24).toString("hex");
-  yield* fs.makeDirectory(stateDir, { recursive: true });
-  yield* fs.writeFileString(file, salt, { mode: 0o600 });
-  return salt;
+  const persisted = yield* Effect.gen(function* () {
+    const existing = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => ""));
+    const trimmed = existing.trim();
+    if (/^[a-f0-9]{32,}$/i.test(trimmed)) return trimmed;
+    const salt = NodeCrypto.randomBytes(24).toString("hex");
+    yield* fs.makeDirectory(stateDir, { recursive: true });
+    yield* fs.writeFileString(file, salt, { mode: 0o600 });
+    return salt;
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        "Could not persist the server UI origin salt; using a session salt",
+        error,
+      ).pipe(Effect.as(null)),
+    ),
+  );
+  return persisted ?? NodeCrypto.randomBytes(24).toString("hex");
 });
