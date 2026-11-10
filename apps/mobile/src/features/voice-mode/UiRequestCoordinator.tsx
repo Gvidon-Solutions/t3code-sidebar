@@ -225,7 +225,10 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
       });
       if (decision === "ignore") return;
       const targetEnvironmentId = uiTargetEnvironmentId(request.target, environmentId);
-      if (request.target.kind === "thread" || request.target.kind === "file") {
+      if (
+        request.target.kind === "thread" ||
+        (request.target.kind === "file" && request.target.resolved === undefined)
+      ) {
         const target = environments.find(
           (candidate) => candidate.environmentId === targetEnvironmentId,
         );

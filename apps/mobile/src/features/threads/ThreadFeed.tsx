@@ -2907,8 +2907,6 @@ export const ThreadFeed = memo(function ThreadFeed({
       }) => {
         if (request.signal.aborted) return;
         void Haptics.selectionAsync();
-        if (request.signal.aborted) return;
-        void Haptics.selectionAsync();
         navigation.navigate(
           "ThreadFile",
           resolvedFileTabParams(String(props.environmentId), String(props.threadId), {

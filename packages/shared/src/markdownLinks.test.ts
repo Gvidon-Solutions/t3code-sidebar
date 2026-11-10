@@ -47,6 +47,48 @@ describe("inlineCodeFilePathCandidate", () => {
   });
 });
 
+describe("N2 · bare inline file names", () => {
+  it.each([
+    ["App.tsx", "App.tsx"],
+    ["UserService.ts", "UserService.ts"],
+    ["Main.java", "Main.java"],
+    ["Program.cs", "Program.cs"],
+    ["Button.vue", "Button.vue"],
+    ["Foo.py", "Foo.py"],
+    ["Cargo.toml", "Cargo.toml"],
+    ["Cargo.lock", "Cargo.lock"],
+    ["Gemfile.lock", "Gemfile.lock"],
+    ["Report.pdf", "Report.pdf"],
+    ["Chart.svg", "Chart.svg"],
+    ["Logo.png", "Logo.png"],
+    [".env", ".env"],
+    [".gitignore", ".gitignore"],
+    ["a.swift", "a.swift"],
+    ["a.dart", "a.dart"],
+    ["a.xlsx", "a.xlsx"],
+    ["a.docx", "a.docx"],
+    ["a.log", "a.log"],
+    ["a.ipynb", "a.ipynb"],
+    ["a.proto", "a.proto"],
+    ["a.tf", "a.tf"],
+    ["a.mkv", "a.mkv"],
+    ["foo.py", "foo.py"],
+    ["res.json", "res.json"],
+    ["self.sh", "self.sh"],
+    ["console.log", null],
+    ["foo.bar", null],
+    ["Math.h", null],
+    ["JSON.parse", null],
+    ["Node.js", null],
+    ["user.name", null],
+    ["os.path", null],
+    ["array.map", null],
+    ["this.state", null],
+  ])("treats %s as %s", (source, candidate) => {
+    expect(inlineCodeFilePathCandidate(source)).toBe(candidate);
+  });
+});
+
 describe("parseMarkdownFileLink", () => {
   it.each([
     ["C:%5Crepo%5Cimage.png", "C:\\repo\\image.png"],

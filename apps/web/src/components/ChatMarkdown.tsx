@@ -158,6 +158,7 @@ import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display"
 import { useMeshLayoutOptional } from "../hooks/useMeshLayout";
 import { openCommandPalette } from "../commandPaletteBus";
 import { showFileLocateDialog } from "./files/FileLocateDialogHost";
+import { openLocatedFile } from "../files/openLocatedFile";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { assetEnvironment } from "../state/assets";
@@ -917,14 +918,13 @@ function useChatMarkdownState({
         panelPath,
         result,
         (resolved) =>
-          openAt(
-            resolved.environmentId,
-            resolved.absolutePath,
-            resolved.line ?? fileLinkMeta.line,
-            {
-              rawPath: panelPath,
-            },
-          ),
+          openLocatedFile(threadRef, {
+            ...resolved,
+            ...(resolved.line === undefined && fileLinkMeta.line !== undefined
+              ? { line: fileLinkMeta.line }
+              : {}),
+            ...(result.projectTitle === undefined ? {} : { projectTitle: result.projectTitle }),
+          }),
         (term) => openCommandPalette({ query: term }),
       );
     })();

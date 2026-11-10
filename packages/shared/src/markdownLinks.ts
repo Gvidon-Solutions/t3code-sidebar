@@ -65,92 +65,78 @@ const POSIX_FILE_ROOT_PREFIXES = [
   "/workspaces/",
 ] as const;
 
-const BARE_FILE_EXTENSIONS = new Set([
-  "ts",
-  "tsx",
-  "js",
-  "jsx",
-  "mjs",
-  "cjs",
-  "mts",
-  "cts",
-  "json",
-  "jsonc",
-  "md",
-  "mdx",
-  "markdown",
-  "txt",
-  "yaml",
-  "yml",
-  "toml",
-  "xml",
-  "csv",
-  "tsv",
-  "ini",
-  "cfg",
-  "conf",
-  "env",
-  "lock",
-  "py",
-  "rb",
-  "go",
-  "rs",
-  "java",
-  "kt",
-  "kts",
-  "c",
+const MEMBER_ONLY_EXTENSIONS = new Set([
+  "bar",
+  "baz",
+  "qux",
+  "name",
+  "path",
+  "state",
+  "map",
+  "parse",
   "h",
-  "cc",
-  "cpp",
-  "hpp",
-  "cs",
-  "php",
-  "sh",
-  "bash",
-  "zsh",
-  "fish",
-  "sql",
-  "html",
-  "htm",
-  "css",
-  "scss",
-  "sass",
-  "less",
-  "vue",
-  "svelte",
-  "astro",
-  "pdf",
-  "png",
-  "jpg",
-  "jpeg",
-  "gif",
-  "svg",
-  "webp",
-  "ico",
-  "mp3",
-  "mp4",
-  "webm",
-  "mov",
-  "zip",
-  "tar",
-  "gz",
-  "tgz",
-  "7z",
-  "rar",
-  "wasm",
+  "length",
+  "push",
+  "pop",
+  "shift",
+  "filter",
+  "reduce",
+  "forEach",
+  "toString",
+  "valueOf",
+  "then",
+  "catch",
+  "call",
+  "apply",
+  "bind",
+  "concat",
+  "slice",
+  "splice",
+  "join",
+  "split",
+  "trim",
+  "test",
+  "exec",
+  "match",
+  "replace",
 ]);
 
-const BARE_FILE_DOC_EXTENSIONS = new Set(["md", "mdx", "markdown", "txt"]);
+const CODE_OBJECT_STEMS = new Set([
+  "console",
+  "os",
+  "array",
+  "this",
+  "json",
+  "math",
+  "object",
+  "promise",
+  "process",
+  "window",
+  "document",
+]);
+
+const CODE_LIBRARY_STEMS = new Set(["Node", "Vue", "Next", "Nuxt"]);
+const CODE_RUNTIME_EXTENSIONS = new Set(["js", "mjs", "cjs"]);
 
 const isLinkableBareFileName = (basename: string): boolean => {
   if (EXTENSIONLESS_FILE_NAMES.has(basename)) return true;
-  if (BARE_FILE_EXTENSIONS.has(basename)) return true;
+  // Dotfiles have no stem before the dot: `.env`, `.gitignore`, `.env.local`.
+  if (/^\.[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(basename)) return true;
+  if (basename.endsWith(".")) return false;
   const dot = basename.lastIndexOf(".");
   if (dot <= 0 || dot === basename.length - 1) return false;
+  const stem = basename.slice(0, dot);
   const extension = basename.slice(dot + 1).toLowerCase();
-  if (!BARE_FILE_EXTENSIONS.has(extension)) return false;
-  // `Node.js`, `README.md` and `package.json` differ only by their stem case.
-  return !/^[A-Z]/.test(basename) || BARE_FILE_DOC_EXTENSIONS.has(extension);
+  if (CODE_LIBRARY_STEMS.has(stem) && CODE_RUNTIME_EXTENSIONS.has(extension)) return false;
+  if (
+    CODE_OBJECT_STEMS.has(stem.toLowerCase()) &&
+    (extension === "log" || MEMBER_ONLY_EXTENSIONS.has(extension))
+  ) {
+    return false;
+  }
+  // `foo.bar`, `user.name`, `os.path`: a lowercase identifier followed by a property name.
+  if (MEMBER_ONLY_EXTENSIONS.has(extension) && /^[a-z][a-z0-9_$]*$/.test(stem)) return false;
+  return true;
 };
 
 const EXTENSIONLESS_FILE_NAMES = new Set([

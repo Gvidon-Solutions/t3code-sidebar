@@ -161,6 +161,7 @@ export function FileLocateDialogHost() {
                         : { projectTitle: result.projectTitle }),
                       inProject: candidate.inProject,
                       ...(candidate.notSynced ? { notSynced: true } : {}),
+                      ...(result.worktreeRemoved ? { worktreeRemoved: true } : {}),
                     });
                     close();
                   }}

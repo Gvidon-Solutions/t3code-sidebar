@@ -131,10 +131,10 @@ export const normaliseLocatePath = (rawPath: string, home: string): NormalisedLo
   const machine = parseT3FileLink(value);
   if (machine !== null) value = machine.absolutePath;
   value = decodeIfEncoded(value.replace(/^file:\/\//i, ""));
-  const hashIndex = value.indexOf("#");
-  const hash = hashIndex >= 0 ? value.slice(hashIndex) : "";
-  if (hashIndex >= 0) value = value.slice(0, hashIndex);
-  const position = splitFilePathPosition(value, hash);
+  const fragment = /#L\d+(?:C\d+)?$/i.exec(value);
+  const hash = fragment?.[0] ?? "";
+  if (fragment !== null) value = value.slice(0, fragment.index);
+  const position = splitFilePathPosition(value.replace(/[.,;]+$/, ""), hash);
   const cleaned = position.path.replace(/[.,;]+$/, "");
   const expanded = cleaned.startsWith("~/") ? expandHomePath(cleaned, home) : cleaned;
   return {
@@ -294,14 +294,24 @@ const make = Effect.gen(function* () {
     projectMounts: Record<string, ReadonlyArray<Representation>>,
     absolutePath: string,
   ) => {
+    let best: { logical: string; reps: ReadonlyArray<Representation>; root: string } | null = null;
     for (const [logical, reps] of Object.entries(projectMounts)) {
       for (const rep of reps) {
-        if (isWithinRoot(path, absolutePath, rep.path)) {
-          return { logical, remainder: path.relative(rep.path, absolutePath), reps };
+        if (
+          isWithinRoot(path, absolutePath, rep.path) &&
+          (best === null || rep.path.length > best.root.length)
+        ) {
+          best = { logical, reps, root: rep.path };
         }
       }
     }
-    return null;
+    return best === null
+      ? null
+      : {
+          logical: best.logical,
+          remainder: path.relative(best.root, absolutePath),
+          reps: best.reps,
+        };
   };
 
   const machineRank = (
@@ -465,10 +475,9 @@ const make = Effect.gen(function* () {
           const rightInCwd =
             cwdRoot !== undefined && isWithinRoot(path, path.resolve(right.absolutePath), cwdRoot);
           if (leftInCwd !== rightInCwd) return leftInCwd ? -1 : 1;
-          const mtimeDelta = (right.mtimeMs ?? 0) - (left.mtimeMs ?? 0);
-          return mtimeDelta !== 0
-            ? mtimeDelta
-            : left.absolutePath.length - right.absolutePath.length;
+          const lengthDelta = left.absolutePath.length - right.absolutePath.length;
+          if (lengthDelta !== 0) return lengthDelta;
+          return (right.mtimeMs ?? 0) - (left.mtimeMs ?? 0);
         });
       };
 
@@ -705,7 +714,13 @@ const make = Effect.gen(function* () {
           if (parent === current) break;
           current = parent;
         }
-        if (ancestors.length > 0) {
+        const cwdInProject =
+          (context.projectRoot !== undefined &&
+            isWithinRoot(path, effectiveCwd, context.projectRoot)) ||
+          (context.worktreePath !== null &&
+            context.worktreePath !== undefined &&
+            isWithinRoot(path, effectiveCwd, context.worktreePath));
+        if ((context.projectRoot === undefined || cwdInProject) && ancestors.length > 0) {
           trial("ancestor", self);
           for (const ancestor of ancestors) {
             const stat = yield* statLocal(path.resolve(ancestor, relativePath));
