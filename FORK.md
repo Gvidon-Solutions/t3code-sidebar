@@ -2315,3 +2315,27 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where:** `apps/web/src/components/workspaces/{MeshSettingsPanel,MachinesDialog,ForkThreadDialog}.tsx`,
   `apps/mobile/src/features/settings/SettingsMachinesRouteScreen.tsx`,
   `packages/shared/src/serverSettings.ts`, `apps/server/src/mesh/MeshAgentKit.ts`.
+
+### 2026-11-10 — One machine tag, and its look in the mesh config
+
+- **What:** Every machine tag on web and Android now comes from one component per client with one
+  look. The default is the phone's project-row look: the machine colour as bold uppercase text on
+  a light tint of that colour. The mesh config can change it with `appearance.machineTags`:
+  `style` is `tinted` (default), `solid` or `outline`, and `textColor` is `machine` (default) or
+  `neutral`. Text lightness moves with the theme while the hue stays, so pale and dark machine
+  colours stay readable in light and dark themes. Project strips draw every tag up to three
+  machines with `⇄` and truncate the project title instead; `+N` appears only from four machines
+  and names the hidden ones to assistive tech and on long-press.
+- **How:** `MachineTag.tsx` on each client resolves the appearance from the replicated
+  `SidebarWorkspacesConfig.appearance`; `packages/client-runtime/src/state/machineDisplay.ts`
+  owns `resolveMachineTagAppearance`, `machineTagPalette` and the contrast adjustment. The
+  contracts schema validates the fields, materialize broadcasts them with the layout, and no new
+  reconcile action is needed.
+- **Where:** `packages/contracts/src/{meshConfig,sidebarWorkspaces}.ts`,
+  `packages/shared/src/meshLayout/{materialize,registry}.ts`,
+  `packages/client-runtime/src/state/{machineDisplay,meshLayout/projectMachineStrip}.ts`,
+  `apps/web/src/components/workspaces/{MachineTag,ProjectMachineStrip}.tsx`,
+  `apps/mobile/src/features/workspaces/{MachineTag,ProjectMachineStrip,WorkspaceThreadLine,
+  WorkspaceChrome,FileMachineTag,MachinesSheet,DraftMachineCards}.tsx`, mobile
+  `features/connection/{ConnectionEnvironmentRow,PullRequestRoutingSettings}.tsx`, and
+  `agent-kit/skills/t3/SKILL.md`.
