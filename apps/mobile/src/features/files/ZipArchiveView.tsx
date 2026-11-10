@@ -18,6 +18,7 @@ import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Keyboard, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Schema from "effect/Schema";
 
 import { PierreEntryIcon } from "../../components/PierreEntryIcon";
 import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
@@ -91,11 +92,21 @@ const NETWORK: ZipFailure = {
   retry: true,
 };
 
-class ZipFailureError extends Error {
-  constructor(readonly failure: ZipFailure) {
-    super(failure.title);
+const ZipFailureSchema = Schema.Struct({
+  title: Schema.String,
+  detail: Schema.String,
+  retry: Schema.Boolean,
+});
+
+class ZipFailureError extends Schema.TaggedError<ZipFailureError>()("ZipFailureError", {
+  failure: ZipFailureSchema,
+}) {
+  override get message() {
+    return this.failure.title;
   }
 }
+
+const isZipFailureError = Schema.is(ZipFailureError);
 
 function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof Error ? cause.message : fallback;
@@ -113,7 +124,7 @@ async function readArchiveBody(
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > ARCHIVE_MAX_BYTES) throw new ZipFailureError(TOO_LARGE);
+      if (size > ARCHIVE_MAX_BYTES) throw new ZipFailureError({ failure: TOO_LARGE });
       chunks.push(value);
       onProgress(size);
     }
@@ -135,9 +146,11 @@ async function openArchive(bytes: ArrayBuffer): Promise<ZipArchive> {
     files = await boundedZip(bytes);
   } catch (cause) {
     throw new ZipFailureError({
-      title: "Couldn't browse this ZIP",
-      detail: `${errorMessage(cause, "It may be incomplete or damaged.")} ${SAVE_ZIP_HINT}`,
-      retry: false,
+      failure: {
+        title: "Couldn't browse this ZIP",
+        detail: `${errorMessage(cause, "It may be incomplete or damaged.")} ${SAVE_ZIP_HINT}`,
+        retry: false,
+      },
     });
   }
   const entries = [...files].map(([path, file]): ZipEntry => {
@@ -187,15 +200,15 @@ function useZipArchive(input: {
     // oxlint-disable-next-line react/set-state-in-effect -- A new archive load resets its progress.
     setState({ status: "loading", receivedBytes: 0, timeLeft: null });
     void (async () => {
-      if (sizeBytes > ARCHIVE_MAX_BYTES) throw new ZipFailureError(TOO_LARGE);
+      if (sizeBytes > ARCHIVE_MAX_BYTES) throw new ZipFailureError({ failure: TOO_LARGE });
       if (isLocal) {
         const file = new File(uri);
-        if ((file.size ?? 0) > ARCHIVE_MAX_BYTES) throw new ZipFailureError(TOO_LARGE);
+        if ((file.size ?? 0) > ARCHIVE_MAX_BYTES) throw new ZipFailureError({ failure: TOO_LARGE });
         return openArchive(await file.arrayBuffer());
       }
       const url = (await refresh()) ?? uri;
       const response = await fetch(url, { signal: abort.signal });
-      if (!response.ok || !response.body) throw new ZipFailureError(NETWORK);
+      if (!response.ok || !response.body) throw new ZipFailureError({ failure: NETWORK });
       const bytes = await readArchiveBody(response.body, (receivedBytes) =>
         setState({
           status: "loading",
@@ -217,7 +230,7 @@ function useZipArchive(input: {
         if (!abort.signal.aborted)
           setState({
             status: "failed",
-            failure: cause instanceof ZipFailureError ? cause.failure : NETWORK,
+            failure: isZipFailureError(cause) ? cause.failure : NETWORK,
           });
       });
     return () => abort.abort();

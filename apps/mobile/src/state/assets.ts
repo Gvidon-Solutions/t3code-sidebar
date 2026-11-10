@@ -10,7 +10,9 @@ import {
 } from "@t3tools/client-runtime/state/assets";
 import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
 import type { AssetResource, EnvironmentId } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { Atom, AsyncResult } from "effect/reactivity";
 
 import { environmentCatalog } from "../connection/catalog";
@@ -143,27 +145,46 @@ interface FreshAssetUrlKey {
   readonly revision: number;
 }
 
+class FreshAssetUrlError extends Schema.TaggedError<FreshAssetUrlError>()("FreshAssetUrlError", {
+  message: Schema.String,
+  cause: Schema.optionalKey(Schema.Defect()),
+}) {}
+
+const isFreshAssetUrlError = Schema.is(FreshAssetUrlError);
+
 // Plain-object keys compare structurally (Effect `Equal`/`Hash`).
 const freshAssetUrlFamily = Atom.family((key: FreshAssetUrlKey) =>
   Atom.make(
-    Effect.tryPromise({
-      try: async (signal): Promise<AuthorizedAssetUrl> => {
-        const url =
-          key.environmentId === null
-            ? null
-            : await refreshAssetUrl(key.environmentId, key.resource, signal);
-        if (!url) throw new Error("Reconnect to this environment and try again.");
-        return { url, authorizedAt: Date.now() };
-      },
-      catch: (cause) =>
-        cause instanceof Error ? cause : new Error("The attachment is unavailable."),
+    Effect.gen(function* () {
+      const authorizedAt = yield* Clock.currentTimeMillis;
+      const url = yield* Effect.tryPromise({
+        try: async (signal) => {
+          const url =
+            key.environmentId === null
+              ? null
+              : await refreshAssetUrl(key.environmentId, key.resource, signal);
+          if (!url)
+            throw new FreshAssetUrlError({
+              message: "Reconnect to this environment and try again.",
+            });
+          return url;
+        },
+        catch: (cause) =>
+          isFreshAssetUrlError(cause)
+            ? cause
+            : new FreshAssetUrlError({
+                message: cause instanceof Error ? cause.message : "The attachment is unavailable.",
+                cause,
+              }),
+      });
+      return { url, authorizedAt } satisfies AuthorizedAssetUrl;
     }),
   ).pipe(Atom.withLabel("fresh-asset-url")),
 );
 
-const noFreshAssetUrl = Atom.make(AsyncResult.initial<AuthorizedAssetUrl, Error>()).pipe(
-  Atom.withLabel("fresh-asset-url:none"),
-);
+const noFreshAssetUrl = Atom.make(
+  AsyncResult.initial<AuthorizedAssetUrl, FreshAssetUrlError>(),
+).pipe(Atom.withLabel("fresh-asset-url:none"));
 const noSessionGeneration = Atom.make(0);
 
 /**

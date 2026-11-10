@@ -1,4 +1,5 @@
 import AppleTranscription from "@react-native-ai/apple/src/NativeAppleTranscription";
+import * as Schema from "effect/Schema";
 import { File } from "expo-file-system";
 
 import {
@@ -9,6 +10,8 @@ import {
   type VoiceTranscriptionOptions,
 } from "@t3tools/client-runtime/voice-input";
 
+const isVoiceTranscriptionError = Schema.is(VoiceTranscriptionError);
+
 function getDeviceLocale(): string {
   return Intl.DateTimeFormat().resolvedOptions().locale;
 }
@@ -18,7 +21,7 @@ function wrapError(
   message: string,
   cause: unknown,
 ): VoiceTranscriptionError {
-  if (cause instanceof VoiceTranscriptionError) {
+  if (isVoiceTranscriptionError(cause)) {
     return cause;
   }
 
