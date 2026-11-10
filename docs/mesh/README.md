@@ -767,6 +767,11 @@ catalog, not a machine name or an assumed operating system.
   on Android read as a different grey tag); configurable appearance belongs in the replicated mesh
   config, not in each surface. Hiding tags behind "+N" while the title has room makes people guess
   what "+1" means: draw every tag up to three and truncate the title instead.
+- The executable bootstrap packs with `codeSplitting: false`, so anything statically reachable
+  from `bin.ts` is bootstrap bytes and launcher memory. One barrel import can exceed the 1 MiB
+  service-launcher budget: `@t3tools/shared/meshConfig` re-exports the contracts barrel and
+  `yaml`. Import the narrow subpath, keep fast paths in the `fastMain.mjs` asset, and let
+  `build-exe` plus `cli-bootstrap.test.ts` enforce the size.
 
 ## Mesh config core
 
@@ -1273,6 +1278,22 @@ default workspace sidebar shows placed projects, so `Sidebar.shortcuts` opts int
 `workspaceSidebarEnabled: false`; the command palette keeps its deliberate `New thread in…`
 label, so `CommandPalette.browser` matches that label. `pullRequestAutolinks` now uses
 Forgejo for its "host links nothing" case because upstream added GitLab reference linking.
+
+The single executable keeps only the service launcher and the fork's thin dispatcher in
+`apps/server/src/bin.ts` (`build-exe` refuses a bootstrap over 1 MiB). The fork's run,
+document, managed-token and ACP fast paths live in a second embedded module,
+`fastMain.mjs` (`apps/server/src/fastMain.ts`), loaded like `binMain.mjs` only for a
+command that needs it. Keeping them out of the bootstrap preserves the service launcher's
+memory win; loading the whole CLI for `t3 run` would lose its latency. The bootstrap packs
+with `codeSplitting: false`, so every import shared by the fast paths is bootstrap bytes:
+import the narrow shared module, not the barrel. `@t3tools/shared/meshConfig` pulls in the
+contracts barrel and `yaml` (about 1.1 MB), while the run platform only needs
+`@t3tools/shared/meshConfig/sshHost`. `apps/server/scripts/cli-bootstrap.test.ts` builds
+the real bootstrap config and enforces the limit; `apps/server/src/bin.test.ts` runs each
+fast-path command as a subprocess, asserts it loads `fastMain` but never `binMain`, and
+pins the argv contract (`run`, `__replica-command`, `__document-text`,
+`__managed-chatgpt-token`, `acp-mcp-*`, `__run-worker`, `__run-guardian`,
+`__service-launcher`).
 
 ## Isolated fast scenarios
 

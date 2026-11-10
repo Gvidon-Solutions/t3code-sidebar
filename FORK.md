@@ -2647,3 +2647,26 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `apps/mobile/src/native/{voiceRecorder*,voiceTranscription*}`, `apps/mobile/src/features/settings/
   {SettingsVoiceRouteScreen,SettingsVoiceModelsRouteScreen,VoiceModelSection,CloudVoiceSection}.tsx`,
   `apps/mobile/src/lib/formatBytes.ts`, `apps/mobile/src/Stack.tsx`.
+
+### 2026-11-10 — Release builds: the executable bootstrap is small again
+
+- **What.** `node apps/server/scripts/cli.ts build-exe` passes again with upstream v0.1.8's
+  1 MiB bootstrap limit instead of refusing the release. The fork's fast paths
+  (`run`, `__run-worker`, `__replica-command`, `__run-guardian`, `__document-text`,
+  `__managed-chatgpt-token`, `acp-mcp-bridge`/`acp-mcp-call`) still dispatch without loading
+  the CLI, with the same arguments as before. `t3 run -- true` and the shim stay fast, and
+  idle `serve`/service-launcher memory stays at upstream's level.
+- **How.** The fast paths moved to a second embedded module, `fastMain.mjs`
+  (`src/fastMain.ts`), packed like `binMain.mjs` and loaded only for those commands; the
+  bootstrap is 33 KiB. The bootstrap still packs with `codeSplitting: false`, so
+  `ServerPlatform` and `RunTransport` now import `resolveSshHost` from the narrow
+  `@t3tools/shared/meshConfig/sshHost` subpath instead of the barrel that pulls the contracts
+  and `yaml` (~1.1 MB). `cli.ts` builds and checks both assets.
+  `apps/server/scripts/cli-bootstrap.test.ts` builds the real bootstrap config and enforces the
+  1 MiB limit; `apps/server/src/bin.test.ts` proves each fast path loads `fastMain` before
+  `binMain` and keeps its argv contract.
+- **Where.** `packages/shared/package.json`,
+  `apps/server/src/{bin,fastMain,fastPathCommands}.ts`,
+  `apps/server/src/platform/ServerPlatform.ts`, `apps/server/src/run/RunTransport.ts`,
+  `apps/server/vite.config.ts`, `apps/server/scripts/cli.ts`, `scripts/lib/linux-arm64-sea.ts`,
+  `apps/server/scripts/cli-bootstrap.test.ts`, `apps/server/src/bin.test.ts`.
