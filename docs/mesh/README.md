@@ -1189,6 +1189,23 @@ Only `sidebar-desktop.yml` ships a release. Upstream's six release/EAS workflows
 the CLI-archive smoke script stay deleted; `t3-highlights` follows upstream's Nitro
 module, with `react-native-nitro-modules` and `nitrogen` pinned in `apps/mobile`.
 
+Fork code must satisfy the same Effect rules as upstream; no file-level
+`@effect-diagnostics` blanket disable. The repeated fixes in phase B1 were: give an
+`Effect.try`/`tryPromise` its object form with a `Schema.TaggedError` catch, pass
+`Clock.currentTimeMillis` instead of `Date.now()` inside an Effect, decode or encode
+unknown JSON with `Schema` rather than `JSON.parse`/`stringify` in Effect code, hoist
+`Schema.is(X)` and `Schema.decodeEffect` to module scope (`no-inline-schema-compile`
+also enforces that), and keep `unknown` out of error channels (a typed union; the HMR
+layer registry is the one place where unrelated layers share storage, so its cast is
+suppressed per line with a reason). `catch(e => tap.pipe(andThen(fail(e))))` becomes
+`tapError`; an error-free effect uses `catchCause` for its defect log.
+
+Two upstream browser tests assume the thread-list sidebar and upstream's copy. The fork's
+default workspace sidebar shows placed projects, so `Sidebar.shortcuts` opts into
+`workspaceSidebarEnabled: false`; the command palette keeps its deliberate `New thread in…`
+label, so `CommandPalette.browser` matches that label. `pullRequestAutolinks` now uses
+Forgejo for its "host links nothing" case because upstream added GitLab reference linking.
+
 ## Isolated fast scenarios
 
 `scripts/mesh-fast/run.sh` owns independent three-server process meshes, private

@@ -188,6 +188,30 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `.github/workflows/{release,release-desktop,desktop-macos-preview}.yml` and
   the CLI-archive smoke script (deleted).
 
+### 2026-11-10 — Upstream v0.1.8 phase B1: Effect-rule clean typecheck
+
+- **What.** `pnpm typecheck` is green in contracts, shared, client-runtime, server, mobile and
+  web, with every Effect language-service diagnostic in fork code fixed rather than suppressed:
+  33 server, 2 client-runtime and 104 mobile errors. The two upstream web browser tests that
+  timed out against the fork are green: the command palette matches the fork's own
+  `New thread in…` label, and the sidebar shortcuts test runs against the thread-list sidebar
+  it was written for (the fork still defaults to the workspace sidebar). The mobile
+  `pullRequestAutolinks` "host links nothing" case moves to Forgejo because upstream added
+  GitLab reference linking.
+- **How.** Typed `Schema.TaggedError` catches replace untyped `Effect.try`/`tryPromise`;
+  `Clock.currentTimeMillis` replaces `Date.now()` in Effect code; `Schema.decodeEffect` /
+  `Schema.encodeEffect` replace `JSON.parse` / `JSON.stringify` in Effect code; `Schema.is`
+  and compiled decoders are hoisted to module scope. `catch`-refail chains become `tapError`,
+  generator-wide `Effect.orDie`s are hoisted, and `RunRemoteError` is a `Schema.TaggedError`
+  checked with `Schema.is`. Plan-mode-free mobile keeps its own screens; only Effect
+  correctness and test setup changed.
+- **Where.** `apps/server/src/{delivery/MobileOta,mesh/{MeshBootstrap,MeshInstall,MeshStateBackup,ThreadForkService},orchestration-v2/VoiceSessionService,peer/connection/{PeerFacts,PeerSessions},replicas/{MeshSsh,ProjectReplicaService},run/{RunRemoteError,RunGuardian,RunClient.test,RunTransport.test}}.ts`,
+  `apps/mobile/src/{connection/{platform,storage,migration},features/agent-awareness/*,features/cloud/*,features/files/*,features/pull-requests/*,features/settings/*,features/diagnostics/*,lib/*,native/*,persistence/*,state/*,components/*}.ts*`,
+  `packages/client-runtime/src/{errors/plainMessage.test,state/meshLayout/pendingDraftSend.test}.ts`,
+  `apps/web/src/components/{CommandPalette.browser.test,Sidebar.shortcuts.browser.test}.tsx`,
+  `apps/mobile/src/features/pull-requests/pullRequestAutolinks.test.ts`;
+  `docs/mesh/README.md`.
+
 ### 2026-11-10 — Desktop UI source follow-ups from the W3 audit
 
 - **What.** The offline page's "Choose another server" keeps `bundled=1` and drops only the
