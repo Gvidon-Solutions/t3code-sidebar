@@ -109,6 +109,30 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-10 — Upstream v0.1.8 merge audit fixes (migrations, preflight, auth hardening)
+
+- **What.** The merge audit's findings are fixed. The service preflight and `databaseMigrationHead`
+  now apply the same legacy-fork mapping as startup: a live pre-merge database with fork rows
+  80-84 in `effect_sql_migrations` updates, while a real newer upstream id still blocks. The head
+  is `max(upstream head, fork head)` across both ledgers, so the preflight, `selfUpdate`'s
+  track-switch check and the npm launcher agree. A newer row in either ledger refuses startup, not
+  only the preflight. The `bc0a8f1f26` ledger (PeerReceiptRetention at 82, before
+  PeerIdentityBindings at 1002) reconciles by name without a hole, and a ledger an earlier merged
+  build left half-reconciled is rewound to its contiguous prefix and refilled. Peer pairing omits
+  the app-approval opt-in, so the SQL gate cannot match an approval row; MCP logs an error at
+  startup when its client authenticator is not wired.
+- **How.** `LEGACY_FORK_MIGRATION_IDS` is exported with a null target for the old 82 receipt row;
+  the reconcile deletes that row and lets 1002-1004 run, and fills any known hole. The reconcile
+  and both ledger assertions share one transaction, so a refusal rolls back. `recordedMigrations`
+  tags each row with its ledger. Tests seed the live 80-84 shape, the `bc0a8f1f26` 80/81/82 shape,
+  the post-bug 1000/1001/1003 hole, a newer upstream row, a newer fork row, a legacy DB copy of the
+  live server state, and a missing MCP authenticator.
+- **Where.** `apps/server/src/persistence/{Migrations.ts,Migrations.test.ts,databaseMigrationHead.ts}`,
+  `apps/server/src/cloud/{servicePreflight.ts,servicePreflight.test.ts,selfUpdate.test.ts}`,
+  `apps/server/src/auth/{EnvironmentAuth.ts,EnvironmentAuth.test.ts}`,
+  `apps/server/src/mcp/{McpHttpServer.ts,McpHttpServer.test.ts}`, `scripts/build-npm-launcher.ts`,
+  `docs/mesh/README.md`.
+
 ### 2026-11-10 — Upstream v0.1.8 web and desktop
 
 - **What.** Takes upstream v0.1.8's web and Electron work while keeping the fork's web

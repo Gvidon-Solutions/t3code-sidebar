@@ -1078,9 +1078,18 @@ fork one again. One idempotent reconcile moves a pre-v0.1.8 fork's records (Mesh
 PeerConnections at 78 or 81, PeerIdentityBindings at 82, PeerReceiptRetention at 82 or 83,
 CloseTerminalRunNodes at 84) out of `effect_sql_migrations` into the fork ledger before the
 upstream migrator runs, so upstream's `080_ScheduledTaskThreadMode` applies. Both ledgers refuse to
-open a database written by a newer build. Fork migrations are idempotent so existing layout and
-creation receipts survive; `Migrations.test.ts` covers a fresh database, an upstream-only database
-and a legacy fork database in each historical numbering.
+open a database written by a newer build, in the preflight and at startup.
+`persistence/databaseMigrationHead.ts` reads both ledgers and reports `max(upstream head, fork
+head)`, so the
+service preflight, `selfUpdate`'s track-switch check and the npm launcher's `databaseMigration`
+agree; legacy upstream rows are mapped, not treated as newer, which is what lets every live
+pre-merge database update. A `PeerReceiptRetention` record at legacy id 82 (the 2026-11-08
+`bc0a8f1f26` build, which predates `PeerIdentityBindings` at 1002) is deleted without a fork row so
+1002-1004 run; a ledger a previous build already left with the 1002 hole is rewound to its
+contiguous prefix and refilled. Fork migrations are idempotent so existing layout and creation
+receipts survive; `Migrations.test.ts` covers a fresh database, an upstream-only database, each
+historical fork numbering, the `bc0a8f1f26` shape and the half-reconciled hole, and
+`servicePreflight.test.ts` covers the live 80-84 shape and a newer row in each ledger.
 
 `PeerMcpClient` records transport outcomes before decoding tool results on either transport.
 A tool refusal is a healthy answer; missing/malformed responses still mark the link failing.
@@ -1384,6 +1393,10 @@ existing credentials; only those can acquire a binding on first authenticated us
 local outgoing link or `mesh.machineBinding`. The durable upgrade is logged and listed in
 `meshLayout.status.legacyIdentityUpgrades` and `t3ctl mesh status` (including `--json`); unknown
 peers and new unbound tokens must pair again.
+A peer redeeming a pairing code never passes the app-approval opt-in (`peerPairingGrantInput`), so
+the pairing SQL gate cannot match an `mcp-approval:<level>` row structurally, not only because the
+code looks like one. `McpHttpServer` logs an error at startup when `McpClientAuthenticator` is not
+wired instead of silently disabling OAuth and peer sign-in.
 An HTTP relay request carries `[sender]`; a forwarded call carries `[origin, relay]`. Both
 transports check the list against the bound sender, including the initial one-element form.
 HTTP idempotency namespaces use the authenticated peer ID (or session ID); relay caller IDs
