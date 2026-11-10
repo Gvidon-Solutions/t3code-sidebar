@@ -12,6 +12,63 @@ import * as NodePath from "node:path";
 const { join } = NodePath;
 import * as NodeSqlite from "node:sqlite";
 
+test("drain polls status after closing admission instead of holding one long call", async () => {
+  const root = mkdtempSync(join(tmpdir(), "delivery-drain-poll-"));
+  try {
+    const ctl = join(root, "ctl.mjs");
+    const calls = join(root, "calls");
+    const gate = join(root, "gate.json");
+    const unitPath = join(root, "app.service");
+    writeFileSync(unitPath, "ExecStart=/old/t3 serve\n");
+    writeFileSync(
+      ctl,
+      `import fs from "node:fs"; const calls=${JSON.stringify(calls)}; const file=${JSON.stringify(gate)}; const tool=process.argv[3]; const input=JSON.parse(process.argv[4]||"{}"); fs.appendFileSync(calls, tool+"\\n"); let state=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,"utf8")):{requestId:null,phase:"open",polls:0}; if(tool==="t3_delivery_drain"){state={requestId:input.requestId,phase:"draining",activeRuns:1,polls:0};fs.writeFileSync(file,JSON.stringify(state));} if(tool==="t3_delivery_drain_status"){const polls=state.polls+1;state={...state,polls,phase:polls>=2?"drained":"draining",activeRuns:polls>=2?0:1};fs.writeFileSync(file,JSON.stringify(state));} if(tool==="t3_delivery_cancel_drain"){state={requestId:null,phase:"open",polls:0};fs.writeFileSync(file,JSON.stringify(state));} console.log(JSON.stringify(state));`,
+    );
+    const runtimeDir = join(root, "versions");
+    mkdirSync(runtimeDir);
+    writeFileSync(
+      join(runtimeDir, "delivery-state.json"),
+      JSON.stringify({
+        phase: "prepared",
+        now: false,
+        unit: "ExecStart=/old/t3 serve\n",
+        next: "ExecStart=/old/t3 serve\n",
+        previousHealth: {},
+      }),
+    );
+    const { targetOperation } = await import("./target.mjs");
+    const started = Date.now();
+    const drained = await targetOperation(
+      {
+        runtimeDir,
+        home: root,
+        node: process.execPath,
+        ctl,
+        unitPath,
+        scope: "user",
+        unit: "app.service",
+        maxWaitMs: 2000,
+        now: false,
+      },
+      "drain",
+    );
+    assert.equal(drained.phase, "drained");
+    assert.ok(Date.now() - started < 2000);
+    assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), [
+      "t3_delivery_drain_status",
+      "t3_delivery_drain",
+      "t3_delivery_drain_status",
+      "t3_delivery_drain_status",
+    ]);
+    assert.equal(
+      JSON.parse(readFileSync(join(runtimeDir, "delivery-state.json"), "utf8")).phase,
+      "fenced",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("isolated target switches its configured unit and restores the exact previous DB and executable", () => {
   for (const scope of ["user", "system"]) {
     const root = mkdtempSync(join(tmpdir(), "delivery-target-"));
@@ -39,7 +96,7 @@ test("isolated target switches its configured unit and restores the exact previo
       execFileSync("tar", ["czf", archive, "-C", root, "stage"]);
       writeFileSync(
         join(root, "ctl.mjs"),
-        `import fs from "node:fs"; const file=${JSON.stringify(join(root, "gate.json"))}; const tool=process.argv[3]; let state=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,"utf8")):{requestId:null,phase:"open"}; if(tool==="t3_delivery_drain"){const input=JSON.parse(process.argv[4]);state={requestId:input.requestId,phase:input.now?"draining":"drained",activeRuns:input.now?1:0};fs.writeFileSync(file,JSON.stringify(state));} if(tool==="t3_delivery_cancel_drain"){state={requestId:null,phase:"open"};fs.writeFileSync(file,JSON.stringify(state));} console.log(JSON.stringify(tool?.startsWith("t3_delivery_")?state:tool==="t3_mesh_update_health"?{version:"1",revision:"r1",entries:{},replicasReady:true}:{current:{doc:{}}}));`,
+        `import fs from "node:fs"; const file=${JSON.stringify(join(root, "gate.json"))}; const tool=process.argv[3]; let state=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,"utf8")):{requestId:null,phase:"open"}; if(tool==="t3_delivery_drain"){const input=JSON.parse(process.argv[4]);state={requestId:input.requestId,phase:"draining",activeRuns:1};fs.writeFileSync(file,JSON.stringify(state));} if(tool==="t3_delivery_drain_status"){state={...state,phase:"drained",activeRuns:0};fs.writeFileSync(file,JSON.stringify(state));} if(tool==="t3_delivery_cancel_drain"){state={requestId:null,phase:"open"};fs.writeFileSync(file,JSON.stringify(state));} console.log(JSON.stringify(tool?.startsWith("t3_delivery_")?state:tool==="t3_mesh_update_health"?{version:"1",revision:"r1",entries:{},replicasReady:true}:{current:{doc:{}}}));`,
       );
       const config = {
         runtimeDir: join(root, "versions"),
@@ -257,5 +314,8 @@ test("the target script runs alone on a machine, so it imports only Node builtin
   const source = readFileSync(new URL("./target.mjs", import.meta.url), "utf8");
   const specifiers = [...source.matchAll(/^\s*import\s[^;]*?from\s+"([^"]+)"/gms)].map((m) => m[1]);
   assert.ok(specifiers.length > 0);
-  assert.deepEqual(specifiers.filter((specifier) => !specifier.startsWith("node:")), []);
+  assert.deepEqual(
+    specifiers.filter((specifier) => !specifier.startsWith("node:")),
+    [],
+  );
 });
