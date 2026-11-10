@@ -38,6 +38,7 @@ const state = vi.hoisted(() => ({
   approve: vi.fn(),
   answer: vi.fn(),
   feedback: vi.fn(),
+  startSideChat: vi.fn(async () => true),
   updateSettings: vi.fn(),
   question: {
     id: "language",
@@ -55,6 +56,7 @@ const state = vi.hoisted(() => ({
     interactionMode: "default",
     runtime: null,
     latestRun: null,
+    lineage: { rootThreadId: "thread", parentThreadId: null, relationshipToParent: null },
   },
 }));
 
@@ -206,7 +208,7 @@ beforeEach(() => {
 describe("mobile task permissions", () => {
   it("consumes an approval reply without queueing a parent message", async () => {
     state.grantedEnvironments.add("secondary");
-    const composer = useThreadComposerState();
+    const composer = useThreadComposerState({ startSideChat: state.startSideChat });
     const requests = useSelectedThreadRequests();
     const approval = { ...state.pendingRequests.approvals[0]!, supportsFeedback: true };
     const messageId = await composer.onSendMessage(undefined, async (text) =>
@@ -230,7 +232,7 @@ describe("mobile task permissions", () => {
 
   it("preserves a draft changed during an approval reply and never sends it to the parent", async () => {
     state.grantedEnvironments.add("secondary");
-    const composer = useThreadComposerState();
+    const composer = useThreadComposerState({ startSideChat: state.startSideChat });
     const beforeDispatch = async () => {
       state.draft = { ...state.draft, text: "New feedback" };
       return "responded" as const;
@@ -242,7 +244,7 @@ describe("mobile task permissions", () => {
   });
 
   it("keeps a connected read-only task's draft instead of queueing it with another environment's grant", async () => {
-    const composer = useThreadComposerState();
+    const composer = useThreadComposerState({ startSideChat: state.startSideChat });
     expect(await composer.onSendMessage()).toBeNull();
     expect(state.enqueue).not.toHaveBeenCalled();
     expect(state.clearDraft).not.toHaveBeenCalled();
@@ -253,7 +255,7 @@ describe("mobile task permissions", () => {
 
   it("rechecks a retained send callback before clearing or queueing the draft", async () => {
     state.grantedEnvironments.add("secondary");
-    const composer = useThreadComposerState();
+    const composer = useThreadComposerState({ startSideChat: state.startSideChat });
     state.grantedEnvironments.delete("secondary");
     expect(await composer.onSendMessage()).toBeNull();
     expect(state.clearDraft).not.toHaveBeenCalled();
@@ -396,24 +398,27 @@ describe("mobile handoff preview and submission", () => {
       ],
     };
 
-    const disabled = useThreadComposerState();
+    const disabled = useThreadComposerState({ startSideChat: state.startSideChat });
     expect(disabled.pendingHandoff).toBeNull();
     expect(await disabled.onSendMessage()).toBeNull();
     expect(state.enqueue).not.toHaveBeenCalled();
     expect(state.clearDraft).not.toHaveBeenCalled();
 
     projectOverride.enabled = true;
-    expect(useThreadComposerState().pendingHandoff).toEqual({ from: [source], to: selection });
+    expect(useThreadComposerState({ startSideChat: state.startSideChat }).pendingHandoff).toEqual({
+      from: [source],
+      to: selection,
+    });
 
     provider.availability = "unavailable";
-    const unavailable = useThreadComposerState();
+    const unavailable = useThreadComposerState({ startSideChat: state.startSideChat });
     expect(unavailable.pendingHandoff).toBeNull();
     expect(await unavailable.onSendMessage()).toBeNull();
     expect(state.enqueue).not.toHaveBeenCalled();
     expect(state.clearDraft).not.toHaveBeenCalled();
 
     provider.availability = "available";
-    const available = useThreadComposerState();
+    const available = useThreadComposerState({ startSideChat: state.startSideChat });
     expect(available.pendingHandoff).toEqual({ from: [source], to: selection });
     expect(await available.onSendMessage()).toBe("message");
     expect(state.enqueue).toHaveBeenCalledExactlyOnceWith(
@@ -423,5 +428,56 @@ describe("mobile handoff preview and submission", () => {
       }),
     );
     expect(state.clearDraft).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("mobile /side side chats", () => {
+  it("starts a side chat with the typed prompt and clears the draft", async () => {
+    state.grantedEnvironments.add("secondary");
+    state.serverConfig = {
+      providers: [{ instanceId: "codex", driver: "codex", enabled: true }],
+      environment: { capabilities: { sideChats: true } },
+    } as unknown as ServerConfig;
+    state.draft = { text: "/side why does this fail?", attachments: [], modelSelection: undefined };
+    const composer = useThreadComposerState({ startSideChat: state.startSideChat });
+
+    expect(composer.sideChatUnavailableReason).toBeNull();
+    expect(await composer.onSendMessage()).toBeNull();
+
+    expect(state.startSideChat).toHaveBeenCalledExactlyOnceWith(
+      { environmentId: "secondary", threadId: "thread" },
+      "why does this fail?",
+    );
+    expect(state.clearDraft).toHaveBeenCalledOnce();
+    expect(state.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("keeps a side chat's attachments and context in the draft", async () => {
+    state.grantedEnvironments.add("secondary");
+    state.serverConfig = {
+      providers: [{ instanceId: "codex", driver: "codex", enabled: true }],
+      environment: { capabilities: { sideChats: true } },
+    } as unknown as ServerConfig;
+    state.draft = {
+      text: "/side read this",
+      attachments: [{ id: "attachment" } as DraftComposerImageAttachment],
+      modelSelection: undefined,
+    };
+    const composer = useThreadComposerState({ startSideChat: state.startSideChat });
+
+    expect(await composer.onSendMessage()).toBeNull();
+
+    expect(state.startSideChat).not.toHaveBeenCalled();
+    expect(state.clearDraft).not.toHaveBeenCalled();
+  });
+
+  it("does not offer side chats from a server without the capability", () => {
+    state.serverConfig = {
+      providers: [{ instanceId: "codex", driver: "codex", enabled: true }],
+      environment: { capabilities: {} },
+    } as unknown as ServerConfig;
+    const composer = useThreadComposerState({ startSideChat: state.startSideChat });
+
+    expect(composer.sideChatUnavailableReason).toMatch(/Update this environment/);
   });
 });

@@ -303,6 +303,8 @@ export interface ThreadDetailScreenProps {
     ) => Promise<boolean | "responded">,
     onWillEnqueue?: () => void,
   ) => Promise<MessageId | null>;
+  /** Present while this thread can fork a side chat from the composer. */
+  readonly offersSideChat?: boolean;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
   readonly onRespondToApproval: ApprovalResponder;
@@ -1820,6 +1822,14 @@ function ThreadDetailBody(
                         selectedThread={props.selectedThread}
                         hasCompactableConversation={
                           hasCompactableConversation && !props.isCompacting
+                        }
+                        offersSideChat={
+                          props.offersSideChat === true &&
+                          !props.draftMode &&
+                          props.canOperateThread &&
+                          props.queuedRunEdit === null &&
+                          props.activePendingApproval === null &&
+                          props.activePendingUserInput === null
                         }
                         serverConfig={props.serverConfig}
                         queueCount={props.selectedThreadQueueCount}
