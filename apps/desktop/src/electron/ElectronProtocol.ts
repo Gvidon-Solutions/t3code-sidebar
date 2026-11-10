@@ -394,7 +394,7 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     }
     // The server's cookie-origin defence must see a real origin. The shell is the
     // trusted caller of a first-party session, so it names the server itself.
-    if (injectedAuthorization !== null) {
+    if (injectedAuthorization !== null || injectedCookie !== null) {
       headers.set("origin", targetOrigin.origin);
       // A Host-rewriting reverse proxy must still tell the server the public host.
       headers.set("x-forwarded-host", targetOrigin.host);
@@ -403,7 +403,15 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   const init: RequestInit = {
     method: request.method,
     headers,
-    ...(serverUi ? { redirect: "error" as const } : {}),
+    ...(serverUi
+      ? {
+          // Only an authorized (or main-document) request may see the cookie store or the
+          // shell jar; a sandboxed frame's no-token request must stay credential-free.
+          credentials:
+            hasRequestToken || options.document === true ? ("include" as const) : ("omit" as const),
+          redirect: "error" as const,
+        }
+      : {}),
   };
   if (options.document || request.mode === "navigate") {
     init.cache = "no-store";
@@ -599,7 +607,12 @@ export const make = Effect.gen(function* () {
     // Keep the shell session across a transient outage; the same server may come back.
     pageOrigins.delete(host);
     currentOrigins.delete(rendererId);
-    await input.onSource?.(null, "Server UI unavailable or incompatible; using bundled client");
+    await input.onSource?.(
+      null,
+      fallbackOptions.auth
+        ? "Server UI authentication failed; using bundled client"
+        : "Server UI unavailable or incompatible; using bundled client",
+    );
     const fallback = new URL(`${input.scheme}://app/`);
     fallback.searchParams.set("desktopWindowId", String(rendererId));
     fallback.searchParams.set("bundled", "1");
@@ -629,10 +642,15 @@ export const make = Effect.gen(function* () {
                 const rendererId =
                   serverUiRendererId(requestUrl.host) ??
                   Number(requestUrl.searchParams.get("desktopWindowId"));
-                const isDocument =
-                  request.mode === "navigate" || navigations.get(rendererId) === request.url;
-                if (isDocument) navigations.delete(rendererId);
+                // Only the main-frame navigation recorded for this renderer is a document.
+                // Subframe navigations (previews, MCP apps, guest HTML) are subresources.
                 const serverHost = serverUiRendererId(requestUrl.host) !== undefined;
+                // Server-host documents require the main-frame navigation recorded for this
+                // renderer. Subframe navigations are subresources and never get credentials.
+                const isDocument = serverHost
+                  ? navigations.get(rendererId) === request.url
+                  : request.mode === "navigate" || navigations.get(rendererId) === request.url;
+                if (isDocument) navigations.delete(rendererId);
                 const id = requestUrl.searchParams.get("desktopWindowId");
                 if (
                   isDocument &&

@@ -187,8 +187,22 @@ function startServer(baseDir, port, binDir) {
   return state;
 }
 
+let proofIframePost = null;
+
 function createHttpsProxy({ key, cert }, httpPort, tlsPort) {
   const server = NodeHttps.createServer({ key, cert }, (request, response) => {
+    if (request.method === "POST" && request.url?.startsWith("/api/w2-iframe-post")) {
+      proofIframePost = {
+        authorization: request.headers.authorization ?? null,
+        cookie: request.headers.cookie ?? null,
+        requestToken: request.headers["x-t3-server-ui"] ?? null,
+        origin: request.headers.origin ?? null,
+        secFetchSite: request.headers["sec-fetch-site"] ?? null,
+      };
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("iframe post accepted");
+      return;
+    }
     const upstream = NodeHttp.request(
       {
         host: "127.0.0.1",
@@ -247,7 +261,7 @@ async function main() {
   NodeChildProcess.execFileSync("git", ["init", "-q"], { cwd: projectDir });
   await NodeFSP.writeFile(
     NodePath.join(assets, "w2-preview.html"),
-    '<!doctype html><meta charset="utf-8"><title>HTML preview</title><body style="margin:0;font:15px system-ui,sans-serif;background:#faf9f7;color:#222"><main style="padding:24px"><h1 style="margin:0 0 8px;font-size:20px">HTML preview</h1><p style="margin:0;color:#666">Served by this machine and rendered inside the server UI.</p><p style="margin:16px 0 0;padding:12px 14px;border:1px solid #ddd;border-radius:10px;background:#fff">If you can read this, the preview surface is working.</p></main></body>',
+    '<!doctype html><meta charset="utf-8"><title>HTML preview</title><body style="margin:0;font:15px system-ui,sans-serif;background:#faf9f7;color:#222"><main style="padding:24px"><h1 style="margin:0 0 8px;font-size:20px">HTML preview</h1><p style="margin:0;color:#666">Served by this machine and rendered inside the server UI.</p><p style="margin:16px 0 0;padding:12px 14px;border:1px solid #ddd;border-radius:10px;background:#fff">If you can read this, the preview surface is working.</p><script>fetch("/api/w2-iframe-post", { method: "POST", body: "side effect" }).catch(() => {})</script></main></body>',
   );
   const certificate = createCertificate(output);
   const certificatePem = NodeFS.readFileSync(NodePath.join(output, "cert.pem"), "utf8").replace(
@@ -255,11 +269,12 @@ async function main() {
     "",
   );
   // Trust only this proof's certificate and only for its loopback host.
-  await defaultSession.setCertificateVerifyProc((request, callback) => {
+  const verifyCertificate = (request, callback) => {
     const hostAllowed = request.hostname === "127.0.0.1" || request.hostname === "localhost";
     const sameCertificate = request.certificate.data.replace(/\s+/g, "") === certificatePem;
     callback(hostAllowed && sameCertificate ? 0 : -2);
-  });
+  };
+  await defaultSession.setCertificateVerifyProc(verifyCertificate);
   const origin = new URL(`https://127.0.0.1:${tlsPort}/`);
   let serverOriginUrl = origin;
   const proxy = await createHttpsProxy(certificate, httpPort, tlsPort);
@@ -403,17 +418,7 @@ async function main() {
           yield* sync(Channels.GET_RELAY_TELEMETRY_ENABLED_CHANNEL, () => false);
           yield* ipc.handle({
             channel: Channels.GET_CONNECTION_CATALOG_CHANNEL,
-            handler: () =>
-              Effect.sync(() => {
-                console.log(
-                  JSON.stringify({
-                    phase: "catalog-read",
-                    targets: catalog.targets.length,
-                    credentials: catalog.credentials.length,
-                  }),
-                );
-                return JSON.stringify(catalog);
-              }),
+            handler: () => Effect.succeed(JSON.stringify(catalog)),
           });
           yield* ipc.handle({
             channel: Channels.SET_CONNECTION_CATALOG_CHANNEL,
@@ -537,6 +542,7 @@ async function main() {
               bar.style.cssText = "padding:8px 12px;background:#1d1d1d;color:#ddd;font:12px system-ui,sans-serif";
               const frame = document.createElement("iframe");
               frame.id = "w2-preview-frame";
+              frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
               frame.src = "/w2-preview.html";
               frame.style.cssText = "width:100%;height:calc(100% - 30px);border:0";
               card.append(bar, frame);
@@ -556,6 +562,9 @@ async function main() {
                 ),
               20_000,
             );
+            await waitFor("iframe preview POST arrived", () => proofIframePost !== null, 20_000);
+            NodeAssert.equal(proofIframePost?.authorization, null);
+            NodeAssert.equal(proofIframePost?.cookie, null);
             await sleep(400);
             await screenshot("02-html-preview.png");
             await evaluate(
@@ -679,13 +688,6 @@ async function main() {
             );
             await sleep(1_000);
             const fallbackText = await bodyText();
-            console.log(
-              JSON.stringify({
-                phase: "auth-impossible-shot",
-                url: window.webContents.getURL(),
-                hasProject: fallbackText.includes("studio-project"),
-              }),
-            );
             NodeAssert.ok(fallbackText.includes("studio-project"), "bundled app shows the project");
             NodeAssert.ok(!fallbackText.includes("Can't reach"), "bundled app is connected");
             NodeAssert.ok(!fallbackText.includes("T3 Code failed to start"));
