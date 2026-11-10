@@ -212,7 +212,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `.github/workflows/{release,release-desktop,desktop-macos-preview}.yml` and
   the CLI-archive smoke script (deleted).
 
-### 2026-11-10 — Upstream v0.1.8 phase B1: Effect-rule clean typecheck
+### 2026-11-10 — Upstream v0.1.8: Effect-rule clean typecheck
 
 - **What.** `pnpm typecheck` is green in contracts, shared, client-runtime, server, mobile and
   web, with every Effect language-service diagnostic in fork code fixed rather than suppressed:

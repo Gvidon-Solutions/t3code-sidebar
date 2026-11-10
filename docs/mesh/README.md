@@ -1258,7 +1258,7 @@ the CLI-archive smoke script stay deleted; `t3-highlights` follows upstream's Ni
 module, with `react-native-nitro-modules` and `nitrogen` pinned in `apps/mobile`.
 
 Fork code must satisfy the same Effect rules as upstream; no file-level
-`@effect-diagnostics` blanket disable. The repeated fixes in phase B1 were: give an
+`@effect-diagnostics` blanket disable. The repeated fixes in this merge were: give an
 `Effect.try`/`tryPromise` its object form with a `Schema.TaggedError` catch, pass
 `Clock.currentTimeMillis` instead of `Date.now()` inside an Effect, decode or encode
 unknown JSON with `Schema` rather than `JSON.parse`/`stringify` in Effect code, hoist
