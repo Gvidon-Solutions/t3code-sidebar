@@ -14,6 +14,7 @@ const SHARED_SERVER_SETTING_KEYS = [
   "newWorktreesStartFromOrigin",
   "sourceControlWritingStyle",
   "textGenerationModelSelection",
+  "textGenerators",
   "sidebarWorkspaces",
 ] as const satisfies ReadonlyArray<keyof ServerSettings & keyof ServerSettingsPatch>;
 

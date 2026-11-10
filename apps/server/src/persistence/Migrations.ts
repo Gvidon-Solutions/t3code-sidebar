@@ -82,11 +82,12 @@ import Migration0076 from "./Migrations/076_ProjectionProjectsPinArchive.ts";
 import Migration0077 from "./Migrations/077_RepairBooleanSettledOverride.ts";
 import Migration0078 from "./Migrations/078_DropOrchestrationEventCorrelationIndex.ts";
 import Migration0079 from "./Migrations/079_DelegatedRecoveryIndexes.ts";
-import Migration0080 from "./Migrations/080_MeshLayout.ts";
-import Migration0082 from "./Migrations/082_PeerIdentityBindings.ts";
-import Migration0081 from "./Migrations/081_PeerConnections.ts";
-import Migration0083 from "./Migrations/083_PeerReceiptRetention.ts";
-import Migration0084 from "./Migrations/084_CloseTerminalRunNodes.ts";
+import Migration0080 from "./Migrations/080_ScheduledTaskThreadMode.ts";
+import ForkMigration1000 from "./Migrations/1000_MeshLayout.ts";
+import ForkMigration1001 from "./Migrations/1001_PeerConnections.ts";
+import ForkMigration1002 from "./Migrations/1002_PeerIdentityBindings.ts";
+import ForkMigration1003 from "./Migrations/1003_PeerReceiptRetention.ts";
+import ForkMigration1004 from "./Migrations/1004_CloseTerminalRunNodes.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -169,15 +170,38 @@ const migrationEntries = [
   [77, "RepairBooleanSettledOverride", Migration0077],
   [78, "DropOrchestrationEventCorrelationIndex", Migration0078],
   [79, "DelegatedRecoveryIndexes", Migration0079],
-  // Sidebar fork: MeshLayout first shipped as id 77, which upstream v0.1.7 claims.
-  [80, "MeshLayout", Migration0080],
-  [81, "PeerConnections", Migration0081],
-  [82, "PeerIdentityBindings", Migration0082],
-  [83, "PeerReceiptRetention", Migration0083],
-  [84, "CloseTerminalRunNodes", Migration0084],
+  [80, "ScheduledTaskThreadMode", Migration0080],
+] as const;
+
+// Sidebar fork: the fork's own migrations live in a separate ledger under their own id range,
+// so they never collide with an upstream id. They run after every upstream migration.
+const FORK_MIGRATIONS_TABLE = "effect_sql_fork_migrations";
+const FORK_MIGRATION_BASE_ID = 1000;
+
+const forkMigrationEntries = [
+  [1000, "MeshLayout", ForkMigration1000],
+  [1001, "PeerConnections", ForkMigration1001],
+  [1002, "PeerIdentityBindings", ForkMigration1002],
+  [1003, "PeerReceiptRetention", ForkMigration1003],
+  [1004, "CloseTerminalRunNodes", ForkMigration1004],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
+export const forkMigrationManifest = forkMigrationEntries.map(([id, name]) => [id, name] as const);
+
+// Migration ids a pre-split fork build recorded in the upstream ledger, mapped to the fork ids
+// they became. MeshLayout shipped under 77 and later 80; PeerConnections under 78 and 81;
+// PeerReceiptRetention under 82 and 83 before peer identity took 82.
+const LEGACY_FORK_MIGRATION_IDS = [
+  { legacyId: 77, legacyName: "MeshLayout", id: 1000 },
+  { legacyId: 78, legacyName: "PeerConnections", id: 1001 },
+  { legacyId: 80, legacyName: "MeshLayout", id: 1000 },
+  { legacyId: 81, legacyName: "PeerConnections", id: 1001 },
+  { legacyId: 82, legacyName: "PeerIdentityBindings", id: 1002 },
+  { legacyId: 82, legacyName: "PeerReceiptRetention", id: 1003 },
+  { legacyId: 83, legacyName: "PeerReceiptRetention", id: 1003 },
+  { legacyId: 84, legacyName: "CloseTerminalRunNodes", id: 1004 },
+] as const;
 
 const makeMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(
@@ -188,65 +212,71 @@ const makeMigrationLoader = (throughId?: number) =>
     ),
   );
 
+const makeForkMigrationLoader = (throughId?: number) =>
+  Migrator.fromRecord(
+    Object.fromEntries(
+      forkMigrationEntries
+        .filter(([id]) => throughId === undefined || id <= throughId)
+        .map(([id, name, migration]) => [`${id}_${name}`, migration]),
+    ),
+  );
+
 const FIRST_V2_MIGRATION_ID = 55;
 
-// Sidebar fork: MeshLayout first shipped as id 77, which upstream v0.1.7 claims. Drop the old
-// record so upstream's 77 and the renumbered 80 run; 80 uses CREATE TABLE IF NOT EXISTS.
-const reconcileForkMeshLayoutMigration = Effect.fn("reconcileForkMeshLayoutMigration")(
-  function* () {
-    const sql = yield* SqlClient.SqlClient;
-    yield* sql.withTransaction(
-      Effect.gen(function* () {
-        const tables = yield* sql`
-          SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
+// Sidebar fork: move the fork's migration records out of the upstream ledger into the fork
+// ledger once, so upstream's 080 can run even though a fork build recorded 80-84. Idempotent:
+// a database that already uses the fork ledger is left alone.
+const reconcileForkMigrationLedger = Effect.fn("reconcileForkMigrationLedger")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql.withTransaction(
+    Effect.gen(function* () {
+      const tables = yield* sql`
+        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
+      `;
+      if (tables.length === 0) return;
+      const forkNames = new Map<number, string>(
+        forkMigrationEntries.map(([id, name]) => [id, name]),
+      );
+      yield* sql`CREATE TABLE IF NOT EXISTS ${sql(FORK_MIGRATIONS_TABLE)} (
+        migration_id INTEGER PRIMARY KEY NOT NULL,
+        created_at datetime NOT NULL DEFAULT current_timestamp,
+        name VARCHAR(255) NOT NULL
+      )`;
+      let moved = false;
+      for (const { legacyId, legacyName, id } of LEGACY_FORK_MIGRATION_IDS) {
+        const legacy = yield* sql<{ readonly migration_id: number }>`
+          SELECT migration_id FROM effect_sql_migrations
+          WHERE migration_id = ${legacyId} AND name = ${legacyName}
         `;
-        if (tables.length === 0) return;
-        const legacy = yield* sql<{ readonly migration_id: number; readonly name: string }>`
-          SELECT migration_id, name FROM effect_sql_migrations
-          WHERE migration_id = 77 AND name = 'MeshLayout'
+        if (legacy.length === 0) continue;
+        const expectedName = forkNames.get(id);
+        if (expectedName === undefined) continue;
+        const existing = yield* sql<{ readonly name: string }>`
+          SELECT name FROM ${sql(FORK_MIGRATIONS_TABLE)} WHERE migration_id = ${id}
         `;
-        if (legacy.length === 0) return;
-        const later = yield* sql<{ readonly migration_id: number }>`
-          SELECT migration_id FROM effect_sql_migrations WHERE migration_id > 77 AND NOT (migration_id = 78 AND name = 'PeerConnections')
-        `;
-        if (later.length > 0) {
+        if (existing.length === 0) {
+          yield* sql`
+            INSERT INTO ${sql(FORK_MIGRATIONS_TABLE)} (migration_id, name)
+            VALUES (${id}, ${expectedName})
+          `;
+        } else if (existing[0]!.name !== expectedName) {
           return yield* new Migrator.MigrationError({
             kind: "BadState",
-            message: "Cannot move the fork's MeshLayout migration with later migrations recorded.",
+            message: `The fork migrations ledger already records ${id} as ${existing[0]!.name}, not ${expectedName}. It was probably written by a different build.`,
           });
         }
-        yield* sql`DELETE FROM effect_sql_migrations WHERE (migration_id = 77 AND name = 'MeshLayout') OR (migration_id = 78 AND name = 'PeerConnections')`;
-        yield* Effect.logInfo("Moved the sidebar fork's MeshLayout migration from 77 to 80");
-      }),
-    );
-  },
-);
-
-// Unreleased F2b databases used 82 for receipts before peer identity took that id.
-const reconcileForkPeerReceiptMigration = Effect.fn("reconcileForkPeerReceiptMigration")(
-  function* () {
-    const sql = yield* SqlClient.SqlClient;
-    yield* sql.withTransaction(
-      Effect.gen(function* () {
-        const tables =
-          yield* sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'`;
-        if (tables.length === 0) return;
-        const legacy =
-          yield* sql`SELECT migration_id FROM effect_sql_migrations WHERE migration_id = 82 AND name = 'PeerReceiptRetention'`;
-        if (legacy.length === 0) return;
-        const later =
-          yield* sql`SELECT migration_id FROM effect_sql_migrations WHERE migration_id > 82`;
-        if (later.length > 0)
-          return yield* new Migrator.MigrationError({
-            kind: "BadState",
-            message: "Cannot move the fork's receipt migration with later migrations recorded.",
-          });
-        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = 82 AND name = 'PeerReceiptRetention'`;
-        yield* Effect.logInfo("Moved the sidebar fork's receipt migration from 82 to 83");
-      }),
-    );
-  },
-);
+        yield* sql`
+          DELETE FROM effect_sql_migrations
+          WHERE migration_id = ${legacyId} AND name = ${legacyName}
+        `;
+        moved = true;
+      }
+      if (moved) {
+        yield* Effect.logInfo("Moved the sidebar fork's migrations into their own ledger");
+      }
+    }),
+  );
+});
 
 // Migrators skip ids up to the highest recorded; reject collisions that would skip V2 schema.
 const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function* (
@@ -281,6 +311,41 @@ const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function*
   });
 });
 
+// The fork ledger uses reserved ids, but a database written by a newer fork build still must not
+// be opened by an older one: its extra rows are unknown here and running on is unsafe.
+const assertForkMigrationsCanRun = Effect.fn("assertForkMigrationsCanRun")(function* (
+  throughId?: number,
+) {
+  if (throughId !== undefined && throughId < FORK_MIGRATION_BASE_ID) return;
+  const sql = yield* SqlClient.SqlClient;
+  const tables = yield* sql`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${FORK_MIGRATIONS_TABLE}
+  `;
+  if (tables.length === 0) return;
+  const recorded = yield* sql<{
+    readonly migration_id: number;
+    readonly name: string;
+  }>`SELECT migration_id, name FROM ${sql(FORK_MIGRATIONS_TABLE)}`;
+  const latestRecordedId = Math.max(0, ...recorded.map((row) => row.migration_id));
+  const recordedNames = new Map(recorded.map((row) => [row.migration_id, row.name]));
+  const diverged = [
+    ...forkMigrationEntries.flatMap(([id, name]) => {
+      if (id > latestRecordedId) return [];
+      const recordedName = recordedNames.get(id);
+      if (recordedName === name) return [];
+      return [`${id}_${name} (recorded: ${recordedName ?? "nothing"})`];
+    }),
+    ...recorded
+      .filter((row) => !forkMigrationEntries.some(([id]) => id === row.migration_id))
+      .map((row) => `${row.migration_id}_${row.name} (unknown to this build)`),
+  ];
+  if (diverged.length === 0) return;
+  return yield* new Migrator.MigrationError({
+    kind: "BadState",
+    message: `This database's fork migration ledger does not match this build: ${diverged.join(", ")}. It was probably written by a newer build. Start the build that wrote it; opening it with an older build is not supported.`,
+  });
+});
+
 const run = Migrator.make({});
 
 export interface RunMigrationsOptions {
@@ -292,19 +357,23 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
 }: RunMigrationsOptions = {}) {
   const includesV2 =
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
+  const includesFork =
+    toMigrationInclusive === undefined || toMigrationInclusive >= FORK_MIGRATION_BASE_ID;
   const previewMigrations = includesV2 ? yield* reconcileV2PreviewMigration() : [];
   if (includesV2) {
-    if (toMigrationInclusive === undefined || toMigrationInclusive >= 80) {
-      yield* reconcileForkMeshLayoutMigration();
-    }
-    if (toMigrationInclusive === undefined || toMigrationInclusive >= 82) {
-      yield* reconcileForkPeerReceiptMigration();
-    }
+    yield* reconcileForkMigrationLedger();
     yield* assertV2MigrationsCanRun(toMigrationInclusive);
+    yield* assertForkMigrationsCanRun(toMigrationInclusive);
   }
   const executedMigrations = [
     ...previewMigrations,
     ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
+    ...(includesFork
+      ? yield* run({
+          loader: makeForkMigrationLoader(toMigrationInclusive),
+          table: FORK_MIGRATIONS_TABLE,
+        })
+      : []),
   ];
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0

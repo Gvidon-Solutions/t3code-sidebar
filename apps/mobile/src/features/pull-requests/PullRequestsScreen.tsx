@@ -317,7 +317,6 @@ export function PullRequestsScreen(
             ? initialScrollOffset - (Platform.OS === "ios" ? insets.top : 0)
             : undefined
         }
-        contentInsetStartAdjustment={Platform.OS === "ios" ? insets.top : 0}
         contentContainerStyle={{
           paddingBottom:
             Math.max(bottomSafeArea, workspace.bottomClearance) -

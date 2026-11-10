@@ -21,6 +21,7 @@ import { ProviderRegistry } from "../provider/ProviderRegistry.ts";
 import { ReplicaRuntime } from "../replicas/ReplicaRuntime.ts";
 import * as Layout from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as ForkTransactions from "./ForkTransactions.ts";
+import { AssetSigner } from "../assets/AssetSigner.ts";
 import * as Fork from "./ThreadForkService.ts";
 
 class ForkReadError extends Schema.TaggedError<ForkReadError>()("ForkTransactionError", {
@@ -55,6 +56,7 @@ it.effect("bounds expiry retries while keeping the durable staging transaction f
       Layer.mock(ProviderRegistry)({}),
       Layer.mock(ProjectionStoreV2)({}),
       Layer.mock(ReplicaRuntime)({}),
+      Layer.mock(AssetSigner)({}),
       journal,
     ).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
     yield* Effect.gen(function* () {

@@ -14,6 +14,8 @@ type AppVariant = "development" | "preview" | "production" | "sidebar";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
+// Expo's TypeScript setup otherwise installs `typescript` on every start; we typecheck with tsrs.
+process.env.EXPO_NO_TYPESCRIPT_SETUP = "1";
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const androidPackageOverride = repoEnv.T3_MOBILE_ANDROID_PACKAGE?.trim();
@@ -216,7 +218,12 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
         displayName: "Agent Activity",
         description: "Shows the current state of active T3 Code agents.",
         android: null,
-        ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
+        ios: {
+          supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
+          // Embeds the layout so the gallery preview and a new widget render
+          // before the app has run once; the app replaces it on publish.
+          initialLayout: "./src/widgets/AgentActivityWidget.tsx",
+        },
       },
     ],
   },
@@ -380,7 +387,6 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-asset",
-    "react-native-pdf-jsi",
     [
       "expo-font",
       {
@@ -513,6 +519,8 @@ const config: ExpoConfig = {
     "./plugins/withAndroidModernPopupMenu.cjs",
     "./plugins/withAndroidModernAlertDialog.cjs",
     "./plugins/withAndroidPredictiveBackCompat.cjs",
+    // MainActivity mods run in reverse order; extend the tablet-orientation override.
+    "./plugins/withAndroidWindowDisplayMetrics.cjs",
     "./plugins/withAndroidTabletOrientation.cjs",
     ...(APP_VARIANT === "sidebar" ? ["./plugins/withAndroidReleaseSigning.cjs"] : []),
     ...(isIosPersonalTeamBuild ? ["./plugins/withoutIosPersonalTeamCapabilities.cjs"] : []),
@@ -533,6 +541,9 @@ const config: ExpoConfig = {
           )
         : null,
     forkReleaseRepo: APP_VARIANT === "sidebar" ? "Gvidon-Solutions/t3code-sidebar" : null,
+    secretsFeatureEnabled: ["1", "true"].includes(
+      process.env.T3CODE_FEATURE_SECRETS?.trim().toLowerCase() ?? "",
+    ),
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,

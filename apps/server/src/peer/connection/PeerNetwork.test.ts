@@ -1,6 +1,6 @@
 import { PEER_HOPS_ERROR } from "./peerIdentity.ts";
 import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
-import migratePeerIdentities from "../../persistence/Migrations/082_PeerIdentityBindings.ts";
+import migratePeerIdentities from "../../persistence/Migrations/1002_PeerIdentityBindings.ts";
 import { McpDomainAnnotation } from "../../mcp/McpToolDomain.ts";
 import { linkedTestDocument } from "../../../testFixtures/MeshLayoutTestLayer.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";

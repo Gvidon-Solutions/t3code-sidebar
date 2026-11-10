@@ -43,7 +43,7 @@ cannot hold a drain. A runless node counts only while it started within the last
 a heartbeat, older ones are stale. Terminal `run.updated` projection writes close their open
 child nodes (`orchestration-v2/TerminalRunNodes.ts`: todo lists completed, tool calls
 interrupted, approval and input requests cancelled) and complete active todo-list plans, and
-migration `084_CloseTerminalRunNodes` repairs the same shapes in existing databases once.
+migration `1004_CloseTerminalRunNodes` repairs the same shapes in existing databases once.
 Abandoned persisted fences expire at startup one minute after their deadline. Admission
 failures stay typed during outbox/runtime recovery; deferred ids are read once per recovery pass. Its operational journal survives restart;
 already accepted dormant starts remain in the outbox without occupying worker slots or spending
@@ -162,7 +162,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   Migrated titles escape glob wildcards. Key helpers encode machine claims/bindings, and malformed
   URI segments are ignored by client materialization paths.
 - **Peer receipts.** `peer/connection/PeerReceipts.ts` reserves an in-flight key before SQL
-  and atomically inserts its durable intent. Receipt migration 83 adds indexed creation times;
+  and atomically inserts its durable intent. Fork receipt migration 1003 adds indexed creation times;
   startup and hourly-on-use sweeps retain thirty days, including interrupted requests. Stored
   responses are capped at 64 KiB of encoded bytes; an oversized response still reaches its
   original caller, while retries receive an explicit 413 receipt rather than repeating work.
@@ -1068,12 +1068,19 @@ protocol-3 launchers, including N-1 launchers, restore the DB immediately instea
 of waiting for the generic preparation timeout. The runtime startup tests assert
 activation → mesh health → launcher commit → lease release.
 
-## Upstream v0.1.7 integration
+## Upstream v0.1.8 integration
 
-Upstream migration ids 77–79 are reserved; MeshLayout is 80 and PeerConnections is 81.
-`persistence/Migrations.ts` reconciles legacy fork history before the migrator reads its highest
-id. Both fork migrations are idempotent so existing layout and creation receipts survive;
-`Migrations.test.ts` covers sidebar.60, the v2 connection schema and plain upstream v0.1.7.
+The fork's migrations live in their own ledger, `effect_sql_fork_migrations`, under reserved ids
+from 1000: MeshLayout is 1000, PeerConnections 1001, PeerIdentityBindings 1002,
+PeerReceiptRetention 1003 and CloseTerminalRunNodes 1004. `persistence/Migrations.ts` runs the
+upstream migrator first and the fork migrator after it, so an upstream id can never collide with a
+fork one again. One idempotent reconcile moves a pre-v0.1.8 fork's records (MeshLayout at 77 or 80,
+PeerConnections at 78 or 81, PeerIdentityBindings at 82, PeerReceiptRetention at 82 or 83,
+CloseTerminalRunNodes at 84) out of `effect_sql_migrations` into the fork ledger before the
+upstream migrator runs, so upstream's `080_ScheduledTaskThreadMode` applies. Both ledgers refuse to
+open a database written by a newer build. Fork migrations are idempotent so existing layout and
+creation receipts survive; `Migrations.test.ts` covers a fresh database, an upstream-only database
+and a legacy fork database in each historical numbering.
 
 `PeerMcpClient` records transport outcomes before decoding tool results on either transport.
 A tool refusal is a healthy answer; missing/malformed responses still mark the link failing.
@@ -1149,6 +1156,38 @@ Resilience also verifies that crashing one server leaves the others' restart cou
 An inbound connection can become visible before its reciprocal grant notification commits
 the link. NAT acceptance waits for both the direct connection and the stored reachable,
 address-free grant before testing the relay.
+
+Plan mode, the context-window meter and the legacy sidebar are removed with upstream #33131.
+The composer offers `/model`, `/voice` (fork), `/side`, `/btw` and `/clear`, and
+`useComposerSend` keeps the fork's standalone `/voice` handling beside upstream's `/clear`.
+`__root.tsx` keeps the fork's host coordinators and `MeshLayoutProvider` while taking
+upstream's `appHosts`/`appShell` and `showSidebar={!isWelcome}`, so `/welcome` mounts the shell
+without the first-run gate. `AppSidebarLayout` keeps the workspace-sidebar switch inside
+upstream's `showSidebar` guard, and the workspace-sidebar row is the only entry left in the
+Labs "Legacy" section. Desktop keeps `readMedia` credential-free (`credentials:"omit"`,
+`redirect:"error"`) with the 256 MiB cap while taking upstream's shutdown and first-launch
+`t3` install, which still writes under the fork's `~/.t3-sidebar` base directory. A
+cross-machine `t3-thread://v2` link stays navigable in `MarkdownThreadLink` even when the
+thread is not in this sidebar.
+
+## Upstream v0.1.8 toolchain
+
+Package typecheck is upstream's `effect-tsgo tsrs --noEmit`, not `tsc`; Effect
+language-service diagnostics are errors, so fork code has to satisfy them like upstream's.
+The `@tsc-rs/typescript` catalog entry is gone, and `apps/web`/`apps/desktop` declare
+their typecheck task in `vite.config.ts` (`run.tasks.typecheck`) instead of a package
+script; the fork's old `tsc --noEmit` web script is removed so the task is the only
+definition.
+
+Patched dependencies follow upstream's versions. `react-native-enriched-markdown` is the
+t3.18 tarball in `apps/mobile/deps/`; its Android measured-height fix is upstream #1145, so
+the old t3.16 pnpm patch is gone rather than ported. `@pierre/diffs` stays 1.6.1 with the
+fork's measured-row-height patch. Change the enriched-markdown tarball only through its
+fork, never with a pnpm patch (`.pnpmfile.cjs` fails that install).
+
+Only `sidebar-desktop.yml` ships a release. Upstream's six release/EAS workflows and
+the CLI-archive smoke script stay deleted; `t3-highlights` follows upstream's Nitro
+module, with `react-native-nitro-modules` and `nitrogen` pinned in `apps/mobile`.
 
 ## Isolated fast scenarios
 
@@ -1340,7 +1379,7 @@ files, replicas and threads. Labels are migration input, never a runtime permiss
 that consumes its owner-entered one-time pairing code. The exchange names both environments;
 registration metadata and signed token claims alone confer no identity. Reverse grants use the
 already-bound connection identity. `/peer` never adopts a header identity: unbound tokens return
-401 and conflicting headers or relay hops return 403 on both transports. Migration 82 snapshots
+401 and conflicting headers or relay hops return 403 on both transports. Fork migration 1002 snapshots
 existing credentials; only those can acquire a binding on first authenticated use with a matching
 local outgoing link or `mesh.machineBinding`. The durable upgrade is logged and listed in
 `meshLayout.status.legacyIdentityUpgrades` and `t3ctl mesh status` (including `--json`); unknown

@@ -213,6 +213,37 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
       }).pipe(Effect.provide(layerEnvironmentAuth())),
     );
 
+    it.effect("an app approval code never links a peer environment", () =>
+      Effect.gen(function* () {
+        const auth = yield* EnvironmentAuth.EnvironmentAuth;
+        const sql = yield* SqlClient.SqlClient;
+        const issuerEnvironmentId = yield* (yield* ServerEnvironment.ServerEnvironmentIdentity)
+          .getEnvironmentId;
+        const approval = yield* auth.issuePairingCredential({ access: "auto" });
+        const peer = {
+          clientId: "approval-laptop",
+          environmentId: "laptop",
+          issuerEnvironmentId,
+        };
+        const rejected = yield* Effect.flip(
+          auth.consumeMcpApprovalCode(approval.credential, "auto", peer),
+        );
+        expect(rejected).toMatchObject({
+          _tag: "ServerAuthMcpApprovalCodeError",
+          reason: "not_a_pairing_code",
+        });
+        expect(yield* sql`SELECT * FROM peer_client_identities`).toEqual([]);
+        expect(
+          yield* sql<{ consumed_at: string | null }>`
+            SELECT consumed_at FROM auth_pairing_links WHERE credential = ${approval.credential}
+          `,
+        ).toEqual([{ consumed_at: null }]);
+        // The same approval code still approves an app sign-in without linking.
+        expect(yield* auth.consumeMcpApprovalCode(approval.credential, "auto")).toBe("auto");
+        expect(yield* sql`SELECT * FROM peer_client_identities`).toEqual([]);
+      }).pipe(Effect.provide(layerEnvironmentAuth())),
+    );
+
     it.effect("uses the reusable dev cookie without overriding a normal scoped cookie", () =>
       Effect.gen(function* () {
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
@@ -883,6 +914,45 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
       }).pipe(
         Effect.provide(layerEnvironmentAuth({ desktopBootstrapToken: "desktop-bootstrap-token" })),
       ),
+    );
+
+    it.effect.each(["DPoP", "dpop", "dPoP"])(
+      "accepts %s for a proof-bound HTTP request",
+      (scheme) =>
+        Effect.gen(function* () {
+          const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+          const key = makeDpopKey();
+          const { access_token: token } =
+            yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
+              "desktop-bootstrap-token",
+              ["orchestration:read"],
+              requestMetadata,
+              { proofKeyThumbprint: key.thumbprint },
+            );
+          const iat = Math.floor((yield* DateTime.now).epochMilliseconds / 1_000);
+          const request = {
+            method: "GET",
+            url: "/api/auth/session",
+            cookies: {},
+            headers: {
+              host: "192.168.1.50:3773",
+              authorization: `${scheme} ${token}`,
+              dpop: key.sign({
+                method: "GET",
+                url: "http://192.168.1.50:3773/api/auth/session",
+                token,
+                iat,
+              }),
+            },
+          } as never;
+          expect((yield* serverAuth.authenticateHttpRequest(request)).sessionId).toBeTypeOf(
+            "string",
+          );
+        }).pipe(
+          Effect.provide(
+            layerEnvironmentAuth({ desktopBootstrapToken: "desktop-bootstrap-token" }),
+          ),
+        ),
     );
 
     it.effect("rejects a replayed proof on a bound RPC socket ticket", () =>

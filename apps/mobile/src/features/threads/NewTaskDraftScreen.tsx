@@ -1182,7 +1182,6 @@ export function NewTaskDraftScreen(props: {
         onSendMessage={handleStart}
         onReconnectEnvironment={() => onReconnectEnvironment(selectedProject.environmentId)}
         canSwitchThreadProvider
-        onUpdateThreadInteractionMode={flow.planModeEnabled ? flow.setInteractionMode : undefined}
         onRespondToApproval={async () => {}}
         onSelectUserInputOption={() => {}}
         onChangeUserInputCustomAnswer={() => {}}

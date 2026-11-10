@@ -37,6 +37,7 @@ export function downloadedDebFile(updater: unknown): string | null {
 }
 
 /** A failed install; its message is shown to the user as is. */
+// @effect-diagnostics extendsNativeError:off -- Plain async seam called by electron-updater; this error never enters an Effect failure channel.
 export class DebInstallError extends Error {}
 
 export function describeDebInstallFailure(result: DebInstallCommandResult, file: string): string {

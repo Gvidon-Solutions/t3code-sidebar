@@ -186,7 +186,11 @@ export const make = Effect.gen(function* () {
     const origin =
       input.httpBaseUrl === null
         ? null
-        : yield* Effect.try(() => desktopUiOrigin(input.httpBaseUrl!));
+        : yield* Effect.try({
+            try: () => desktopUiOrigin(input.httpBaseUrl!),
+            catch: (cause) =>
+              new DesktopUiError({ message: "Could not read the UI source", cause }),
+          });
     const local = yield* exposure.backendConfig;
     if (local.port > 0 && desktopUiOrigin(local.httpBaseUrl.href) === origin) return true;
     const raw = yield* catalog.get;
@@ -199,13 +203,11 @@ export const make = Effect.gen(function* () {
       return yield* new DesktopUiError({ message: "This environment is not a saved connection" });
     if (doc.disabledEnvironmentIds.includes(input.environmentId))
       return yield* new DesktopUiError({ message: "This connection is disabled" });
-    const profile = yield* Effect.try(() =>
-      doc.profiles.find(
-        (entry) =>
-          entry.environmentId === input.environmentId &&
-          entry._tag === "BearerConnectionProfile" &&
-          desktopUiOrigin(entry.httpBaseUrl) === origin,
-      ),
+    const profile = doc.profiles.find(
+      (entry) =>
+        entry.environmentId === input.environmentId &&
+        entry._tag === "BearerConnectionProfile" &&
+        desktopUiOrigin(entry.httpBaseUrl) === origin,
     );
     if (profile) return true;
     if (
@@ -414,9 +416,11 @@ export const make = Effect.gen(function* () {
         if (origin !== null && token !== null && !rejected && serverUiIsNewer(input.serverVersion))
           yield* rememberOrigin(origin, input.environmentId, input.serverVersion);
         else if (input.httpBaseUrl !== null) {
-          const invalidOrigin = yield* Effect.try(() => desktopUiOrigin(input.httpBaseUrl!)).pipe(
-            Effect.orElseSucceed(() => null),
-          );
+          const invalidOrigin = yield* Effect.try({
+            try: () => desktopUiOrigin(input.httpBaseUrl!),
+            catch: (cause) =>
+              new DesktopUiError({ message: "Could not read the UI source", cause }),
+          }).pipe(Effect.orElseSucceed(() => null));
           if (invalidOrigin !== null) yield* forgetOrigin(invalidOrigin);
         }
         return false;
@@ -501,9 +505,10 @@ export const make = Effect.gen(function* () {
       ) {
         // A temporary rejection keeps the origin record: serverAuthorization still
         // withholds the credential until its cooldown ends.
-        const previousOrigin = yield* Effect.try(() => desktopUiOrigin(current.httpBaseUrl!)).pipe(
-          Effect.orElseSucceed(() => null),
-        );
+        const previousOrigin = yield* Effect.try({
+          try: () => desktopUiOrigin(current.httpBaseUrl!),
+          catch: (cause) => new DesktopUiError({ message: "Could not read the UI source", cause }),
+        }).pipe(Effect.orElseSucceed(() => null));
         if (previousOrigin !== null) yield* forgetOrigin(previousOrigin);
       }
       yield* refreshLabel;

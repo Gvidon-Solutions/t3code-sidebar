@@ -1137,7 +1137,6 @@ export function HomeScreen(props: HomeScreenProps) {
                 // UIKit owns the bar's inset, so a minimizing bar and a resized column move
                 // the list in the same frame as the bar.
                 contentInsetAdjustmentBehavior="automatic"
-                contentInsetStartAdjustment={Platform.OS === "ios" ? insets.top : 0}
                 // RN scrollTo clamps against raw insets and ignores the automatic bar inset.
                 scrollToOverflowEnabled
                 initialScrollOffset={

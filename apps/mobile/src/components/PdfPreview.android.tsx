@@ -69,13 +69,12 @@ export function PdfPreview(props: { readonly uri: string }) {
   return (
     <Pdf
       source={{ uri: localUri }}
-      page={pdfInitialPage(props.uri)}
-      fitPolicy={0}
-      trustAllCerts={false}
+      initialPage={pdfInitialPage(props.uri)}
+      fitPolicy="width"
       enableAnnotationRendering
       enableDoubleTapZoom
-      onPressLink={(href) => {
-        const url = pdfLinkUrl(href, props.uri);
+      onLinkPress={(event) => {
+        const url = pdfLinkUrl(event.url, props.uri);
         if (url !== null) void tryOpenExternalUrl(url, "file-preview");
       }}
       onError={() => {

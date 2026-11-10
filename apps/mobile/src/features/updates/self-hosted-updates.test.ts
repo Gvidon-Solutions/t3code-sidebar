@@ -7,7 +7,7 @@ import {
 } from "./app-updates";
 import { expect, it, vi } from "vite-plus/test";
 import * as Updates from "expo-updates";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "expo-sqlite/kv-store";
 import {
   rollbackMobileBundle,
   resumeLatestMobileBundle,
@@ -30,7 +30,7 @@ vi.mock("expo-updates", () => ({
   reloadAsync: vi.fn(),
   setUpdateRequestHeadersOverride: vi.fn(),
 }));
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock("expo-sqlite/kv-store", () => ({
   default: { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() },
 }));
 vi.mock("react-native", () => ({

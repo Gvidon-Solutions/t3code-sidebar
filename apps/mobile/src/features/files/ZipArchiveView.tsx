@@ -428,7 +428,6 @@ function ZipArchiveList(props: {
     <View className="flex-1 bg-sheet">
       <LegendList
         renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
-        contentInsetStartAdjustment={props.headerInset}
         className="flex-1"
         data={rows}
         keyExtractor={(row) => `${row.node.entry ? "f" : "d"}:${row.node.path}`}

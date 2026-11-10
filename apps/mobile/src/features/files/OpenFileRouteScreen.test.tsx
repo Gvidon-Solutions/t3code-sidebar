@@ -29,7 +29,7 @@ vi.mock("react-native", () => ({
 vi.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ navigate: state.navigate }),
 }));
-vi.mock("@react-native-async-storage/async-storage", () => ({
+vi.mock("expo-sqlite/kv-store", () => ({
   default: { getItem: state.getItem, setItem: state.setItem },
 }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => ["local", "remote"] }));

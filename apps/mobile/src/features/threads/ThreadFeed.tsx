@@ -216,7 +216,6 @@ import type { ThreadContentPresentation } from "./threadContentPresentation";
 import {
   resolveThreadFeedLiveFollow,
   resolveThreadFeedReflowAnchor,
-  resolveThreadFeedReflowOffset,
   resolveThreadFeedReflowScroll,
   type ThreadFeedLiveFollowEvent,
   type ThreadFeedReflowAnchor,
@@ -3415,15 +3414,6 @@ export const ThreadFeed = memo(function ThreadFeed({
     );
   };
 
-  const holdReflowAnchor = () => {
-    const anchor = reflowAnchorRef.current;
-    if (anchor === "end") return Number.POSITIVE_INFINITY;
-    const list = listRef.current;
-    return anchor && list
-      ? resolveThreadFeedReflowOffset(anchor, list.getState(), reflowLayout())
-      : undefined;
-  };
-
   const handleViewportLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.round(event.nativeEvent.layout.width);
     const nextHeight = Math.round(event.nativeEvent.layout.height);
@@ -3842,16 +3832,10 @@ export const ThreadFeed = memo(function ThreadFeed({
                 }
               : { scrollIndicatorInsets: { top: topContentInset, bottom: 0 } })}
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
-            // Patched LegendList math must allow -headerInset so short-content end scrolls rest below the header.
-            contentInsetStartAdjustment={usesNativeAutomaticInsets ? anchorTopInset : 0}
             contentInsetEndAdjustment={props.contentInsetEndAdjustment}
             keyboardOffset={props.keyboardOffset}
-            // UIKit adds the safe-area bottom to raw contentInset; ThreadDetailScreen under-reports it.
-            // Include that extra inset in LegendList's scroll math so end scrolls reach the resting offset.
-            contentInsetEndStaticAdjustment={usesNativeAutomaticInsets ? insets.bottom : 0}
             // Seed composer height until keyboard integration reports it, or Android's initial end scroll runs too early.
             {...(initialContentInset ? { contentInset: initialContentInset } : {})}
-            adjustedInsetCompensation={usesNativeAutomaticInsets ? insets.bottom : 0}
             freeze={props.freeze}
             // Follow the measured end immediately; animating estimates races row measurement on acknowledgement.
             maintainScrollAtEnd={
@@ -3869,7 +3853,6 @@ export const ThreadFeed = memo(function ThreadFeed({
             // A reflow grows every visible row at once, well past the near-end threshold
             // that otherwise lets a status-bar tap leave the end.
             maintainScrollAtEndThreshold={reflowFollowsEnd ? Number.POSITIVE_INFINITY : undefined}
-            sizeChangeAnchor={reflowAnchorsSizeChanges ? holdReflowAnchor : undefined}
             maintainVisibleContentPosition={
               (followsEnd && !disclosureToggleSettling) ||
               (disclosureToggleSettling && disclosureTopSpace > 0)

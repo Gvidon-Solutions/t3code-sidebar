@@ -109,6 +109,85 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-10 — Upstream v0.1.8 web and desktop
+
+- **What.** Takes upstream v0.1.8's web and Electron work while keeping the fork's web
+  features: plan mode, the context-window meter and the legacy sidebar are gone with upstream
+  #33131, and the composer keeps `/voice` beside upstream's `/clear`; the first run is upstream's
+  welcome page inside the app shell, still wrapped in `MeshLayoutProvider` and the fork's host
+  coordinators; the workspace sidebar stays the switch inside `AppSidebarLayout` and its row is
+  the only entry in the Labs "Legacy" section. Cross-machine thread links and files still open
+  from anywhere. Desktop keeps `readMedia` credential-free with its size cap and takes upstream's
+  shutdown ordering and first-launch `t3` install; the command still targets the fork's
+  `~/.t3-sidebar`, and fork-only desktop modules satisfy the new Effect rules.
+- **How.** `ChatView`/`ChatComposer`/`useComposerSend` drop the interaction-mode and proposed-plan
+  wiring and keep the fork's mesh draft, voice and pending-machine props. `__root.tsx` takes
+  upstream's `appHosts`/`appShell` and `showSidebar={!isWelcome}` and adds the fork's inbox, UI
+  request, files, voice and mesh coordinators to `appHosts`. `MarkdownThreadLink` keeps the local
+  metadata resolution and falls back to a clickable chip for an explicit link to another machine.
+  `AppSidebarLayout` takes the `showSidebar` prop and keeps the workspace/thread sidebar switch.
+  `window.ts` keeps `credentials:"omit"`, `redirect:"error"` and the 256 MiB cap inside upstream's
+  typed `Effect.tryPromise`; `DesktopUi`/`DesktopIpc`/`debInstall` clear the new Effect diagnostics.
+  Web and desktop typecheck through the `vite.config.ts` `run.tasks.typecheck` task
+  (`effect-tsgo tsrs --noEmit`); the fork's old `tsc --noEmit` web script is removed.
+- **Where.** `apps/web/src/components/{ChatView.tsx,AppSidebarLayout.tsx}`,
+  `apps/web/src/components/chat/{ChatComposer.tsx,useComposerSend.ts,useComposerMenuItems.ts,MarkdownThreadLink.tsx}`,
+  `apps/web/src/routes/__root.tsx`, `apps/web/src/{composer-logic.ts,markdown-links.ts,reopenClosedView.ts}`,
+  `apps/web/src/components/settings/*`, `apps/web/src/components/files/AttachmentFilePreview.browser.test.tsx`,
+  `apps/desktop/src/{app/DesktopApp.ts,app/DesktopUi.ts,ipc/methods/window.ts,ipc/DesktopIpc.ts,preload.ts,updates/debInstall.ts}`;
+  `docs/mesh/README.md`.
+
+### 2026-11-10 — Upstream v0.1.8 server, contracts and migration ledger
+
+- **What.** The fork's database migrations move to their own ledger,
+  `effect_sql_fork_migrations`, with reserved ids from 1000 (MeshLayout 1000,
+  PeerConnections 1001, PeerIdentityBindings 1002, PeerReceiptRetention 1003,
+  CloseTerminalRunNodes 1004), so upstream's `080_ScheduledTaskThreadMode` and every later
+  upstream migration run without colliding. One idempotent reconcile moves a pre-merge fork's
+  records out of `effect_sql_migrations` before the upstream migrator, including the older
+  77/78 and 82/83 numbers; either ledger refuses to open a database a newer build wrote.
+  MCP auth keeps the fork's peer identity binding inside the same transaction as the approval
+  code redemption, now with upstream's approval levels: an unbound token still returns 401, a
+  conflicting identity 403, and an app approval code never links an environment. `bin.ts` is one
+  dispatcher for the service launcher, `t3 run` workers and the CLI; server layers carry
+  upstream's speech service beside the mesh ones; settings drop the three keys upstream removed
+  while `workspaceSidebarEnabled` stays. Contracts union both sides' RPCs and permission scopes.
+- **How.** `runMigrations` runs upstream first, then the fork migrator with its own table;
+  `assertV2MigrationsCanRun` and a sibling fork-ledger check reject divergent or newer history.
+  `EnvironmentAuth.consumeMcpApprovalCode` spends the code and writes `peer_client_identities`
+  in one SQL transaction, rejecting approval-code prefixes for peers; `McpOAuth` keeps the
+  "linking needs a plain pairing code" rule and passes the bound identity. `Effect.serviceOption`
+  keeps `McpClientAuthenticator` optional like upstream while `McpHttpServer` keeps the fork's
+  idempotency, hop and fork/mesh interceptors.
+- **Where.** `apps/server/src/persistence/Migrations.ts`,
+  `apps/server/src/persistence/Migrations/1000_MeshLayout.ts` … `1004_CloseTerminalRunNodes.ts`,
+  `apps/server/src/persistence/Migrations.test.ts`,
+  `apps/server/src/auth/{EnvironmentAuth,McpOAuth}.ts`, `apps/server/src/mcp/McpHttpServer.ts`,
+  `apps/server/src/bin.ts`, `apps/server/src/server.ts`,
+  `packages/contracts/src/{rpc,clientRpcPermissions,settings,ipc}.ts`,
+  `packages/shared/src/{serverSettings,markdownLinks}.ts`; `docs/mesh/README.md`.
+
+### 2026-11-10 — Upstream v0.1.8 toolchain, patches and release workflows
+
+- **What.** Package typecheck moves to upstream's `@effect/tsgo` (`effect-tsgo tsrs --noEmit`)
+  with the Effect language-service rules as errors; the `@tsc-rs/typescript` catalog entry is
+  gone, as upstream did. Patched dependencies follow upstream's versions: `@legendapp/list`
+  3.7.2 with its patch, `react-native-enriched-markdown` from the t3.18 tarball (upstream
+  #1145 carries the Android measured-height fix that the fork's t3.16 patch added), and
+  `@pierre/diffs` stays 1.6.1 with the fork's measured-row-height patch. The fork still
+  deletes upstream's release and EAS workflows, and their CLI-archive smoke helper:
+  `sidebar-desktop.yml` is the only release path. Eval fixtures keep the fork's
+  neutral `/home/dev` homes while taking upstream's new `request_secret` ids, schedule-task
+  and page-path assertions.
+- **How.** `pnpm-workspace.yaml` takes upstream's catalog and patch list, drops the `@tsc-rs`
+  entries and keeps the fork's `ws`, `node-forge` and `react-native-webrtc` dependencies;
+  `pnpm-lock.yaml` is upstream's lock regenerated with `pnpm install`; the stale t3.16
+  enriched-markdown patch is removed rather than ported.
+- **Where.** `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `scripts/package.json`,
+  `evals/mcp-tool-use/{run.ts,cases/*.ndjson}`, `patches/` (t3.16 removed),
+  `.github/workflows/{release,release-desktop,desktop-macos-preview}.yml` and
+  the CLI-archive smoke script (deleted).
+
 ### 2026-11-10 — Desktop UI source follow-ups from the W3 audit
 
 - **What.** The offline page's "Choose another server" keeps `bundled=1` and drops only the

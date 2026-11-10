@@ -102,7 +102,7 @@ export const make = (
             ipcMain.handle(channel, (event, raw) =>
               runPromise(
                 Effect.gen(function* () {
-                  yield* Effect.try(() => authorize(event, channel));
+                  yield* Effect.sync(() => authorize(event, channel));
                   yield* Effect.annotateCurrentSpan({ channel });
                   return yield* handler(raw, event);
                 }).pipe(Effect.annotateLogs({ channel }), Effect.withSpan("desktop.ipc.invoke")),

@@ -50,6 +50,7 @@ interface RightPanelPullRequestProps {
 }
 
 interface RightPanelFileProps {
+  readonly projectId?: ProjectId | undefined;
   readonly projectName: string | null;
   readonly workspaceRoot: string | undefined;
   readonly availableEditors: ReadonlyArray<EditorId>;
@@ -217,6 +218,7 @@ export function RightPanelSurfaceContent(props: {
             environmentId={environmentId}
             cwd={workspaceRoot ?? ""}
             projectName={projectName ?? ""}
+            projectId={externalSurface === null ? files.projectId : undefined}
             threadRef={threadRef}
             composerDraftTarget={props.composerDraftTarget}
             keybindings={props.keybindings}

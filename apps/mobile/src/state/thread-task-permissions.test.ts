@@ -247,11 +247,8 @@ describe("mobile task permissions", () => {
     expect(state.enqueue).not.toHaveBeenCalled();
     expect(state.clearDraft).not.toHaveBeenCalled();
     composer.onChangeDraftMessage("Edited locally");
-    composer.onUpdateInteractionMode("plan");
     expect(state.draft.text).toBe("Edited locally");
-    expect(state.updateSettings).toHaveBeenCalledWith("secondary:thread", {
-      interactionMode: "plan",
-    });
+    expect(state.updateSettings).not.toHaveBeenCalled();
   });
 
   it("rechecks a retained send callback before clearing or queueing the draft", async () => {

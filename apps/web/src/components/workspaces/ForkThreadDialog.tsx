@@ -349,7 +349,6 @@ export function ForkThreadDialog(props: {
                         models: selectedEntry.models,
                         model: initial.model,
                         modelOptions: initial.options ?? [],
-                        planModeEnabled: false,
                         allowPromptInjectedEffort: false,
                         onModelOptionsChange: (options) =>
                           setChosen({ ...initial, options: options ?? [] }),

@@ -736,7 +736,6 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
                   // UIKit owns the bar's inset, so a minimizing bar and a resized column
                   // move the list in the same frame as the bar.
                   contentInsetAdjustmentBehavior="automatic"
-                  contentInsetStartAdjustment={barInsets.top}
                   // RN scrollTo clamps against raw insets and ignores the automatic bar inset.
                   scrollToOverflowEnabled
                   refreshControl={

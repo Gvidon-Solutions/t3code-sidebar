@@ -126,7 +126,7 @@ export function renameMachineBindings(
   const bindings = bindingsFromLayout(document);
   const updates: Record<string, Json> = {};
   for (const old of removed) {
-    const matches = added.filter(
+    const matches: string[] = added.filter(
       (name) => JSON.stringify(before.machines[old]) === JSON.stringify(after.machines[name]),
     );
     if (matches.length !== 1 || !bindings[old]) continue;

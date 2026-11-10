@@ -84,9 +84,6 @@ vi.mock("../workspaces/useMeshLayout", () => ({
 vi.mock("../workspaces/useMeshOverview", () => ({
   useMeshOverview: () => ({ machines: [] }),
 }));
-vi.mock("./use-legacy-plan-mode-enabled", () => ({
-  useLegacyPlanModeState: () => ({ enabled: false, loaded: true }),
-}));
 vi.mock("../../components/ui/Dialog", () => ({ alert: vi.fn() }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("../../state/use-remote-environment-registry", () => ({

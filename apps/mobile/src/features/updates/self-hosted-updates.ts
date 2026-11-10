@@ -3,7 +3,7 @@ import {
   flushPendingAppUpdateWrites,
   runAppUpdateCheck,
 } from "./app-updates";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "expo-sqlite/kv-store";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 import { verifiedNativeUpdate } from "./native-update-verification";

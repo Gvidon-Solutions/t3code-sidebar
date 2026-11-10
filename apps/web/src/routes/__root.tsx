@@ -22,6 +22,7 @@ import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
 import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
+import { UseInAnotherAppDialogHost } from "../components/mcp/UseInAnotherAppDialog";
 import { AddProjectToMachineDialogHost } from "../components/AddProjectToMachineDialog";
 import { ForkThreadDialogHost } from "../components/workspaces/ForkThreadDialog";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
@@ -188,27 +189,47 @@ function RootRouteBranch() {
     return hostedPromptLinkLanding;
   }
 
-  if (pathname === "/welcome") {
-    return (
-      <MeshLayoutProvider>
-        <CustomSnoozeDialogHost />
-        <GuestShareDialogHost />
-        <CommandPalette>
-          <AppSidebarLayout>
-            <Outlet />
-          </AppSidebarLayout>
-        </CommandPalette>
-      </MeshLayoutProvider>
-    );
-  }
-
+  const isWelcome = pathname === "/welcome";
   if (authGateState.status !== "authenticated" && authGateState.status !== "hosted-static") {
     return <Outlet />;
   }
 
+  // Settings can reopen /welcome mid-session, so it mounts everything the app does except the
+  // first-run gate and the event router, whose first navigation would leave the page.
+  const appHosts = (
+    <>
+      {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
+      {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
+        <DesktopWebLinkCoordinator />
+      ) : null}
+      {isElectron ? <DesktopUiCoordinator /> : null}
+      {isElectron ? <RunningThreadKeepAlive /> : null}
+      <RelayClientInstallDialog />
+      <ConnectOnboardingDialog />
+      <SshPasswordPromptDialog />
+      <SnapShotCoordinator />
+      <InboxNotificationCoordinator />
+      <UiRequestCoordinator />
+      <OpenFileDialog />
+      <FileLocateDialogHost />
+      <VoiceBubble />
+      <ReopenClosedViewShortcut />
+      <ConfirmDialogHost />
+      <CustomSnoozeDialogHost />
+      <GuestShareDialogHost />
+      <ProjectCloneToastCoordinator />
+      <AddProjectToMachineDialogHost />
+      <UseInAnotherAppDialogHost />
+      <ForkThreadDialogHost />
+      <PendingMeshDraftCoordinator />
+      <DraftProjectKeyReconcile />
+      {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
+    </>
+  );
   const appShell = (
     <CommandPalette>
-      <AppSidebarLayout>
+      {/* Setup starts with an empty workspace, so the Welcome page has no thread list. */}
+      <AppSidebarLayout showSidebar={!isWelcome}>
         <Outlet />
       </AppSidebarLayout>
     </CommandPalette>
@@ -218,42 +239,25 @@ function RootRouteBranch() {
     <>
       <MeshLayoutProvider>
         <ChatGptWelcomeCoordinator />
-        <FirstRunGate
-          enabled={primaryEnvironmentAuthenticated}
-          hostedStatic={authGateState.status === "hosted-static"}
-        >
-          {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
-          {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
-            <DesktopWebLinkCoordinator />
-          ) : null}
-          {isElectron ? <DesktopUiCoordinator /> : null}
-          {isElectron ? <RunningThreadKeepAlive /> : null}
-          <RelayClientInstallDialog />
-          <ConnectOnboardingDialog />
-          <SshPasswordPromptDialog />
-          <SnapShotCoordinator />
-          <InboxNotificationCoordinator />
-          <UiRequestCoordinator />
-          <OpenFileDialog />
-          <FileLocateDialogHost />
-          <VoiceBubble />
-          <ReopenClosedViewShortcut />
-          <ConfirmDialogHost />
-          <CustomSnoozeDialogHost />
-          <GuestShareDialogHost />
-          <ProjectCloneToastCoordinator />
-          <AddProjectToMachineDialogHost />
-          <ForkThreadDialogHost />
-          <PendingMeshDraftCoordinator />
-          <DraftProjectKeyReconcile />
-          {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
-          {primaryEnvironmentAuthenticated ? (
-            <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
-          ) : null}
-          {appShell}
-          {/* Keep the theme editor above the router so drafts survive navigation. */}
-          <ThemeEditorHost />
-        </FirstRunGate>
+        {isWelcome ? (
+          <>
+            {appHosts}
+            {appShell}
+          </>
+        ) : (
+          <FirstRunGate
+            enabled={primaryEnvironmentAuthenticated}
+            hostedStatic={authGateState.status === "hosted-static"}
+          >
+            {appHosts}
+            {primaryEnvironmentAuthenticated ? (
+              <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
+            ) : null}
+            {appShell}
+          </FirstRunGate>
+        )}
+        {/* Above both shells and the router, so drafts survive navigation, including to /welcome. */}
+        <ThemeEditorHost />
       </MeshLayoutProvider>
     </>
   );

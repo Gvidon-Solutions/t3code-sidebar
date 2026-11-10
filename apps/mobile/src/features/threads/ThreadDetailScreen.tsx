@@ -42,7 +42,6 @@ import { deriveBottomControlInsets, type NativeLayoutMetrics } from "../../lib/r
 import type {
   EnvironmentId,
   MessageId,
-  ProviderInteractionMode,
   RuntimeRequestId,
   ScopedThreadRef,
   ServerConfig as T3ServerConfig,
@@ -306,7 +305,6 @@ export interface ThreadDetailScreenProps {
   ) => Promise<MessageId | null>;
   readonly onReconnectEnvironment: () => void;
   readonly canSwitchThreadProvider: boolean;
-  readonly onUpdateThreadInteractionMode?: (interactionMode: ProviderInteractionMode) => void;
   readonly onRespondToApproval: ApprovalResponder;
   readonly onSelectUserInputOption: (
     requestId: RuntimeRequestId,
@@ -1010,10 +1008,6 @@ function ThreadDetailBody(
     listRef,
     composerOverlayRef,
     Math.max(0, estimatedOverlayHeight - nativeInsetOvercount),
-    -nativeInsetOvercount,
-    // The composer already reports its animated height on each layout.
-    // Easing these samples again makes the feed trail behind it.
-    0,
   );
   // Android lays the screen out below its opaque header and reports a zero
   // header height, so the window height overstates the room by the header.
@@ -1875,7 +1869,6 @@ function ThreadDetailBody(
                         onSendMessage={handleSendMessage}
                         onShowUsageLimits={showUsageLimits}
                         canSwitchProvider={props.canSwitchThreadProvider}
-                        onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
                         onHeightChange={handleComposerHeightChange}
                         onEditorFocusChange={handleOwnedInputFocusChange}
                       />

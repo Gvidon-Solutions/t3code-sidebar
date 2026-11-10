@@ -46,6 +46,7 @@ import { ProviderRegistry } from "../provider/ProviderRegistry.ts";
 import * as ReplicaRuntime from "../replicas/ReplicaRuntime.ts";
 import { ProjectionStoreV2 } from "../orchestration-v2/ProjectionStore.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
+import { AssetSigner } from "../assets/AssetSigner.ts";
 import {
   visibleConversationItems,
   readForkHistoryItems,
@@ -127,6 +128,7 @@ const serviceLayer = Layer.effect(
       | ServerSecretStore
       | ServerConfig
       | DocumentText
+      | AssetSigner
     >();
     const mesh = yield* MeshLayoutService;
     const links = yield* PeerLinks;

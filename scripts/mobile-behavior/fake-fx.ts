@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off preferSchemaOverJson:off globalConsole:off - a tiny stdio ACP agent spawned by the server; plain Node keeps it dependency-free.
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalJsonInEffect:off globalConsole:off - a tiny stdio ACP agent spawned by the server; plain Node keeps it dependency-free.
 /**
  * A scripted stand-in for the `fx` CLI, registered as an Fx provider instance so the
  * server streams deterministic replies with no model. A `[[eval:<script>]]` marker in
@@ -8,7 +8,6 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeReadline from "node:readline";
-import { sleep } from "../lib/shell.mjs";
 
 const MODEL = "eval/scripted";
 
@@ -23,6 +22,7 @@ interface Message {
 
 const controlDir = process.env.T3_EVAL_FX_CONTROL_DIR ?? "";
 const send = (message: object) => process.stdout.write(`${JSON.stringify(message)}\n`);
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const update = (sessionId: string, value: object) =>
   send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: value } });
 

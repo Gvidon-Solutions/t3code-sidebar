@@ -66,7 +66,9 @@ export function buildProjectSearchItems(input: ProjectItemsInput) {
 }
 
 /** Projects as targets of the "New thread in..." submenu. */
-export function buildNewThreadInProjectItems(input: ProjectItemsInput) {
+export function buildNewThreadInProjectItems(
+  input: ProjectItemsInput & { readonly currentProjectKey: string | null },
+) {
   return buildProjectActionItems({
     projects: input.projects,
     valuePrefix: "new-thread-in",
@@ -84,6 +86,7 @@ export function buildNewThreadInProjectItems(input: ProjectItemsInput) {
         group={input.projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`)}
         project={project}
         showPathTail={input.ambiguousTitles?.has(project.title) === true}
+        current={input.currentProjectKey === `${project.environmentId}:${project.id}`}
       />
     ),
     icon: projectFaviconIcon,
@@ -99,6 +102,8 @@ export function ProjectMachineDescription(props: {
   readonly project: CommandPaletteProject;
   /** Two projects share this title, so the row needs a path tail to tell them apart. */
   readonly showPathTail?: boolean;
+  /** The "New thread in..." menu marks the project the thread already lives in. */
+  readonly current?: boolean;
 }) {
   const members = props.group?.memberProjects ?? [props.project];
   const tags = projectMachineTags(
@@ -106,11 +111,18 @@ export function ProjectMachineDescription(props: {
     props.group?.projectKey ?? "",
     members.map((member) => member.environmentId),
   );
+  const current = props.current === true;
   const mesh = props.config !== null && tags.some((tag) => tag.tag !== "");
   if (!mesh) {
     return (
-      <span className="truncate text-muted-foreground">
-        {shortProjectPath(props.project.workspaceRoot)}
+      <span className="flex min-w-0 items-center gap-1 truncate text-muted-foreground">
+        {current ? (
+          <>
+            <span className="shrink-0">Current</span>
+            <span className="shrink-0 text-muted-foreground/50">·</span>
+          </>
+        ) : null}
+        <span className="truncate">{shortProjectPath(props.project.workspaceRoot)}</span>
       </span>
     );
   }
@@ -122,6 +134,12 @@ export function ProjectMachineDescription(props: {
         render={<span className="flex min-w-0 items-center gap-1" aria-label={`On ${names}`} />}
       >
         <span className="inline-flex min-w-0 items-center gap-1">
+          {current ? (
+            <>
+              <span className="shrink-0">Current</span>
+              <span className="shrink-0 text-muted-foreground/50">·</span>
+            </>
+          ) : null}
           {tags.map((tag) => (
             <span
               key={tag.environmentId}

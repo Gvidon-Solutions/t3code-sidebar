@@ -85,6 +85,17 @@ describe("filterSharedServerPatch", () => {
   );
 });
 
+describe("server settings classification", () => {
+  it("shares text generators and keeps secret provider references local", () => {
+    const { sharedPatch, localPatch } = splitSharedServerPatch({
+      textGenerators: {},
+      secretProviders: {},
+    });
+    expect(sharedPatch).toHaveProperty("textGenerators");
+    expect(localPatch).toHaveProperty("secretProviders");
+  });
+});
+
 describe("T3 Mesh sidebar workspace fan-out", () => {
   const patch = { sidebarWorkspaces: { ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces } };
 

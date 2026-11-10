@@ -18,6 +18,8 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ServerSettings from "../serverSettings.ts";
 import { restartContinuationRun, continueRestartedRun } from "./RestartContinuation.ts";
@@ -29,6 +31,7 @@ import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as EffectWorker from "./EffectWorker.ts";
 import * as EffectOutbox from "./EffectOutbox.ts";
+import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 
 const threadId = ThreadId.make("thread:restart");
 const runId = RunId.make("run:restart");
@@ -1262,4 +1265,68 @@ it.effect.each(["completed", "failed", "interrupted"] as const)(
         [],
       );
     }).pipe(Effect.provide(MeshTestServices.services)),
+);
+
+it.effect("prepares independent continuations together and waits for durable writes", () =>
+  Effect.gen(function* () {
+    const bothReading = yield* Deferred.make<void>();
+    const bothWriting = yield* Deferred.make<void>();
+    const committed = yield* Deferred.make<void>();
+    let reads = 0;
+    let writes = 0;
+    const recovery = yield* ProviderRuntimeRecovery.make.pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          ServerSettings.layerTest({ continueThreadsAfterServerUpdate: true }),
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getRecoveryThreadIds: () => Effect.succeed([threadId, ThreadId.make("thread:second")]),
+            getRuntimeRecoveryProjection: () =>
+              Effect.gen(function* () {
+                if (++reads === 2) yield* Deferred.succeed(bothReading, undefined);
+                yield* Deferred.await(bothReading);
+                return makeProjection();
+              }),
+          }),
+          Layer.mock(EventSink.EventSinkV2)({
+            writeWithEffects: () =>
+              Effect.gen(function* () {
+                if (++writes === 2) yield* Deferred.succeed(bothWriting, undefined);
+                yield* Deferred.await(committed);
+                return [];
+              }),
+          }),
+          IdAllocator.layer,
+          Layer.mock(EffectWorker.OrchestrationEffectWorkerV2)({}),
+          Layer.mock(EffectOutbox.EffectOutboxV2)({}),
+          Layer.mock(DeliveryAdmission)({ deferredRunIds: Effect.succeed(new Set<string>()) }),
+        ),
+      ),
+    );
+    const fiber = yield* recovery.prepareForShutdown.pipe(Effect.forkChild);
+    yield* Deferred.await(bothWriting);
+    assert.equal(writes, 2);
+    assert.isUndefined(fiber.pollUnsafe());
+    yield* Deferred.succeed(committed, undefined);
+    yield* Fiber.join(fiber);
+  }),
+);
+
+it.effect("skips restart discovery when no project enables continuation", () =>
+  Effect.gen(function* () {
+    const recovery = yield* ProviderRuntimeRecovery.make.pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          ServerSettings.layerTest({ continueThreadsAfterServerUpdate: false }),
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+          Layer.mock(EventSink.EventSinkV2)({}),
+          IdAllocator.layer,
+          Layer.mock(EffectWorker.OrchestrationEffectWorkerV2)({}),
+          Layer.mock(EffectOutbox.EffectOutboxV2)({}),
+          Layer.mock(DeliveryAdmission)({ deferredRunIds: Effect.succeed(new Set<string>()) }),
+        ),
+      ),
+    );
+    yield* recovery.prepareForShutdown;
+    yield* recovery.prepareForShutdown;
+  }),
 );

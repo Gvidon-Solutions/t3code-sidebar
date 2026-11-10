@@ -43,7 +43,6 @@ export function SettingsLabsRouteScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
         <BetaSettingsSection />
-        <LegacySettingsSection />
       </ScrollView>
     </SettingsScreen>
   );
@@ -266,30 +265,6 @@ function BetaSettingsSection() {
       <Text className="px-2 text-sm text-foreground-muted">
         Let agents on a machine work on your other machines, and theirs on it. Turn it on for each
         machine. While it is off, nothing new starts over a link; tasks already running finish.
-      </Text>
-    </View>
-  );
-}
-
-function LegacySettingsSection() {
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  const preferences = useAtomValue(mobilePreferencesAtom);
-  const planModeEnabled =
-    AsyncResult.isSuccess(preferences) && preferences.value.planModeEnabled === true;
-
-  return (
-    <View className="gap-3">
-      <SettingsSection title="Legacy">
-        <SettingsSwitchRow
-          icon="hammer"
-          label="Plan Mode"
-          value={planModeEnabled}
-          onValueChange={(value) => savePreferences({ planModeEnabled: value })}
-        />
-      </SettingsSection>
-      <Text className="px-2 text-sm text-foreground-muted">
-        Opt into retired interfaces kept for compatibility. Plan Mode restores the Build/Plan
-        control; otherwise every task runs in Build mode.
       </Text>
     </View>
   );

@@ -1,5 +1,8 @@
 import { EnvironmentId, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
-import type { PreparedConnection } from "@t3tools/client-runtime/connection";
+import {
+  PrimaryConnectionTarget,
+  type PreparedConnection,
+} from "@t3tools/client-runtime/connection";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveServerUiSource } from "./serverUiSource";
@@ -17,13 +20,12 @@ function prepared(
     httpBaseUrl: "https://studio.example/",
     socketUrl: "wss://studio.example/ws",
     httpAuthorization,
-    target: {
-      _tag: "PrimaryConnectionTarget",
+    target: new PrimaryConnectionTarget({
       environmentId,
       label: "Studio",
       httpBaseUrl: "https://studio.example/",
       wsBaseUrl: "wss://studio.example/",
-    },
+    }),
   } as PreparedConnection;
 }
 
