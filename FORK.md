@@ -130,13 +130,16 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `meshMachineReachable` is the one reachability rule for cards and tags; `draftMachineCards`
   wording and `projectMachineStrip` muting use it. `MeshConnectPrompt` returns nothing in a
   `desktopShell` window.
-- **Where.** `apps/desktop/src/app/DesktopUi.ts`, `apps/web/src/components/desktop/{serverUiSource,
-  DesktopUiCoordinator,desktopBundledFallback}.ts(x)`, `apps/desktop/src/electron/ElectronProtocol.ts`,
+- **Where.** `apps/desktop/src/app/DesktopUi.ts`,
+  `apps/web/src/components/desktop/{serverUiSource.ts,DesktopUiCoordinator.tsx,desktopBundledFallback.ts}`,
+  `apps/web/src/components/settings/DesktopUiVersionRow.tsx`,
   `apps/web/src/components/chat/DraftMachineCards.tsx`,
-  `apps/web/src/components/workspaces/{WorkspaceSidebar,ProjectMachineStrip}.tsx`,
+  `apps/web/src/components/workspaces/WorkspaceSidebar.tsx`,
   `apps/web/src/components/sidebar/MeshConnectPrompt.tsx`,
-  `packages/client-runtime/src/state/{meshMachines,meshLayout/draftMachineCards,
-  meshLayout/projectMachineStrip}.ts`, `packages/shared/src/semver.ts`,
+  `apps/web/src/hooks/useLogicalProjectEnvironments.ts`,
+  `packages/client-runtime/src/state/{meshMachines.ts,meshLayout/draftMachineCards.ts,meshLayout/projectMachineStrip.ts}`,
+  `packages/shared/src/semver.ts`,
+  `apps/mobile/src/features/workspaces/{useWorkspaceHome.ts,workspaceNavigator.ts}`,
   `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/mesh/README.md`.
 
 ### 2026-11-10 — Drain ignores finished runs and repairs orphaned steps
