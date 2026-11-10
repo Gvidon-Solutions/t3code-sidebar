@@ -79,6 +79,7 @@ vi.mock("../../state/project-grouping", () => ({
 // Fork seam: the mesh layout reaches Expo modules, which do not load under jsdom.
 vi.mock("../workspaces/useMeshLayout", () => ({
   useMeshLayout: () => ({ config: null, connectedEnvironmentIds: [] }),
+  useMeshLayoutOptional: () => ({ config: null }),
 }));
 vi.mock("../workspaces/useMeshOverview", () => ({
   useMeshOverview: () => ({ machines: [] }),

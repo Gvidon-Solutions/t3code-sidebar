@@ -10,6 +10,8 @@ const reactTests = [
   "src/features/settings/SettingsMachinesRouteScreen.test.tsx",
   "src/features/files/OpenFileRouteScreen.test.tsx",
   "src/features/workspaces/FileMachineTag.test.tsx",
+  "src/features/workspaces/MachineTag.test.tsx",
+  "src/features/workspaces/ProjectMachineStrip.test.tsx",
   "src/features/threads/git/GitBranchesSheet.test.tsx",
   "src/features/threads/new-task-flow-provider.test.tsx",
   "src/features/workspace/workspace-tabs-state.test.ts",

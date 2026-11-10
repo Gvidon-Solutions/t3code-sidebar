@@ -177,3 +177,11 @@ export function useMeshLayout() {
   if (value === null) throw new Error("MeshLayoutProvider is missing");
   return value;
 }
+
+/** For presentational surfaces that also render in isolation (tests, standalone chips). */
+export function useMeshLayoutOptional(): {
+  readonly config: ReturnType<typeof useMeshLayout>["config"] | null;
+} {
+  const value = use(MeshLayoutContext);
+  return { config: value?.config ?? null };
+}

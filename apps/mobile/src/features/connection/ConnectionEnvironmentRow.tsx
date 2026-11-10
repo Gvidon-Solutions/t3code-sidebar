@@ -24,7 +24,7 @@ import { ConnectionDiagnosisDetails, useConnectionDiagnosis } from "./Connection
 import { ConnectionFormField } from "./ConnectionFormField";
 import { ConnectionStatusDot } from "./ConnectionStatusDot";
 import { environmentStatusText } from "./environmentStatusText";
-import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
+import { MachineTag } from "../workspaces/MachineTag";
 import { useEnvironmentName } from "../workspaces/useEnvironmentName";
 
 function connectionStatusLabel(environment: ConnectedEnvironmentSummary): string | null {
@@ -119,14 +119,7 @@ export function ConnectionEnvironmentRow(props: {
               tintColorClassName="accent-foreground-muted"
             />
             {name.tag.trim() ? (
-              <View
-                className="shrink-0 rounded px-1 py-0.5"
-                style={{ backgroundColor: machineTagBackground(name.color) }}
-              >
-                <Text className="text-[10px] font-t3-bold uppercase text-foreground">
-                  {name.tag}
-                </Text>
-              </View>
+              <MachineTag machine={{ label: name.label, tag: name.tag, color: name.color }} />
             ) : null}
             <Text
               className="min-w-0 flex-shrink text-base font-t3-bold leading-snug text-foreground"

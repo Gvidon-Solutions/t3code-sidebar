@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   list: vi.fn(),
 }));
 vi.mock("react-native", () => ({
+  useColorScheme: () => "light",
   View: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Pressable: ({
     children,
@@ -48,6 +49,9 @@ vi.mock("../../state/workspace", () => ({
 }));
 vi.mock("../workspaces/useMeshLayout", () => ({
   useMeshLayout: () => ({ config: { machines: { remote: { label: "Cloudbox", tag: "CB" } } } }),
+  useMeshLayoutOptional: () => ({
+    config: { machines: { remote: { label: "Cloudbox", tag: "CB" } } },
+  }),
 }));
 vi.mock("../../components/ui/ScreenScrollView", () => ({
   ScreenScrollView: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
