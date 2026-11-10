@@ -128,6 +128,8 @@ const codexAdditionalContext = () =>
 const layerAdvertisedTools = McpHttpServer.layerTools.pipe(
   Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
   Layer.provide(toolHandlerServices),
+  Layer.provideMerge(MeshTestServices.services),
+  Layer.provideMerge(MeshTestServices.required),
 );
 
 // Claude Code loads these tools up front instead of behind ToolSearch, outside this budget.
@@ -168,12 +170,5 @@ it.effect("agent context matches the committed budget", () =>
       measured,
       "Set agentContextBudget.json to the measured values. Before you cut text to fit, run the evals that cover it (evals/README.md).",
     ).toEqual(budget);
-  }).pipe(
-    Effect.provide(
-      Layer.provideMerge(
-        Layer.provideMerge(layerAdvertisedTools, MeshTestServices.services),
-        MeshTestServices.required,
-      ),
-    ),
-  ),
+  }).pipe(Effect.provide(layerAdvertisedTools)),
 );

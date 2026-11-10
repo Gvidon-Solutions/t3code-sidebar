@@ -23,6 +23,7 @@ import * as Hex from "effect/encoding/Hex";
 import * as ThreadForks from "../mesh/ThreadForkService.ts";
 import * as ForkSecrets from "../auth/ServerSecretStore.ts";
 import * as ForkDocuments from "../provider/DocumentText.ts";
+import * as AssetSigner from "../assets/AssetSigner.ts";
 import { ForkTransportInput } from "../mesh/forkTransport.ts";
 import * as Ref from "effect/Ref";
 import * as Context from "effect/Context";
@@ -9356,6 +9357,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                 ),
               ),
           });
+          const forkSecrets = ForkSecrets.layer.pipe(
+            Layer.provideMerge(Layer.succeed(ServerConfig.ServerConfig, configs.get(self)!)),
+          );
           const extras = Layer.mergeAll(
             mesh,
             runtime,
@@ -9411,10 +9415,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                 ]),
               ),
             }),
-            ForkSecrets.layer.pipe(
-              Layer.provideMerge(Layer.succeed(ServerConfig.ServerConfig, configs.get(self)!)),
-            ),
+            forkSecrets,
             ForkDocuments.layer,
+            AssetSigner.layer.pipe(Layer.provideMerge(forkSecrets)),
           ).pipe(
             Layer.provideMerge(
               Layer.succeed(FileSystem.FileSystem, {

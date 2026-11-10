@@ -1533,6 +1533,7 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
         Layer.fresh(layerConfigSources),
         Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
         Layer.mock(ServerBrowser.ServerBrowser)({}),
+        MeshTestServices.required,
       ),
     ),
     Effect.scoped,
