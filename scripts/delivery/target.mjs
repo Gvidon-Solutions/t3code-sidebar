@@ -142,8 +142,7 @@ export async function targetOperation(config, operation) {
           T3CTL_T3_BIN: unitExecutable(unit),
           XDG_CONFIG_HOME: join(config.home, "delivery-client-config"),
         },
-        queryTimeout ??
-          (args[1] === "t3_delivery_drain" ? (config.maxWaitMs ?? 300_000) + 30_000 : 120_000),
+        queryTimeout ?? 120_000,
       ),
     );
     if (Array.isArray(result) && args[0] !== "threads") {
@@ -252,19 +251,30 @@ export async function targetOperation(config, operation) {
     state.now = Boolean(config.now);
     state.phase = manual ? "rollbackDraining" : "draining";
     atomic(statePath, state);
-    const drained = ctl(
+    const deadlineMs = config.maxWaitMs ?? 300_000;
+    const deadlineAt = Date.now() + deadlineMs;
+    // Close admission at once, then poll: one long call outlives the HTTP client timeout.
+    let drained = ctl(
       "tool",
       "t3_delivery_drain",
-      JSON.stringify({
-        requestId: state.requestId,
-        deadlineMs: config.maxWaitMs ?? 300_000,
-        ...(state.now ? { now: true } : {}),
-      }),
+      JSON.stringify({ requestId: state.requestId, deadlineMs, now: true }),
     );
-    if (
-      drained.requestId !== state.requestId ||
-      (drained.phase !== "drained" && !(state.now && drained.phase === "draining"))
-    )
+    if (drained.requestId !== state.requestId)
+      throw new Error("Server did not grant the delivery admission fence");
+    if (!state.now) {
+      const pollMs = Math.min(1000, Math.max(100, Math.floor(deadlineMs / 50)));
+      while (drained.phase !== "drained") {
+        if (Date.now() >= deadlineAt) {
+          ctl("tool", "t3_delivery_cancel_drain", JSON.stringify({ requestId: state.requestId }));
+          throw new Error("Drain deadline exceeded; server stays running");
+        }
+        await setTimeout(Math.min(pollMs, Math.max(0, deadlineAt - Date.now())));
+        drained = ctl("tool", "t3_delivery_drain_status", "{}");
+        if (drained.requestId !== state.requestId)
+          throw new Error("Server did not grant the delivery admission fence");
+      }
+    }
+    if (drained.phase !== "drained" && !(state.now && drained.phase === "draining"))
       throw new Error("Server did not grant the delivery admission fence");
     state.phase = manual ? "rollbackFenced" : "fenced";
     atomic(statePath, state);
