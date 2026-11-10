@@ -63,6 +63,7 @@ describe("V2 preview upgrade", () => {
         [81, "PeerConnections"],
         [82, "PeerIdentityBindings"],
         [83, "PeerReceiptRetention"],
+        [84, "CloseTerminalRunNodes"],
       ]);
       assert.deepStrictEqual(yield* runMigrations(), []);
       assert.deepStrictEqual(yield* sql`SELECT * FROM orchestration_v2_legacy_imports`, imports);
@@ -169,6 +170,7 @@ describe("V2 preview upgrade", () => {
         [81, "PeerConnections"],
         [82, "PeerIdentityBindings"],
         [83, "PeerReceiptRetention"],
+        [84, "CloseTerminalRunNodes"],
       ]);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );

@@ -109,6 +109,11 @@ import {
   THREAD_HISTORY_INLINE_WORK_ITEM_LIMIT,
   THREAD_HISTORY_TURN_SNAPSHOT_ROW_LIMIT,
 } from "./threadHistoryPaging.ts";
+import {
+  TERMINAL_RUN_NODE_KINDS,
+  isTerminalRunStatus,
+  terminalRunNodeStatus,
+} from "./TerminalRunNodes.ts";
 
 export class ProjectionStoreApplyEventError extends Schema.TaggedError<ProjectionStoreApplyEventError>()(
   "ProjectionStoreApplyEventError",
@@ -849,17 +854,39 @@ export function applyToProjection(
         thread: event.payload,
       };
     case "run.created":
-    case "run.updated":
-      return withLocalVisibleTurnItems({
-        ...base,
-        runs: upsertById(
-          base.runs,
-          preserveRunRecordedFields(
-            base.runs.find((run) => run.id === event.payload.id),
-            event.payload,
-          ),
+    case "run.updated": {
+      const runs = upsertById(
+        base.runs,
+        preserveRunRecordedFields(
+          base.runs.find((run) => run.id === event.payload.id),
+          event.payload,
         ),
+      );
+      if (!isTerminalRunStatus(event.payload.status)) {
+        return withLocalVisibleTurnItems({ ...base, runs });
+      }
+      const completedAt = event.occurredAt;
+      const pendingRequestIds = new Set(
+        base.runtimeRequests.filter((request) => request.status === "pending").map(({ id }) => id),
+      );
+      const nodes = base.nodes.map((node) => {
+        if (
+          node.runId !== event.payload.id ||
+          !["pending", "running", "waiting"].includes(node.status) ||
+          (node.runtimeRequestId !== null && pendingRequestIds.has(node.runtimeRequestId))
+        ) {
+          return node;
+        }
+        const status = terminalRunNodeStatus(node.kind);
+        return status === null ? node : { ...node, status, completedAt };
       });
+      const plans = base.plans.map((plan) =>
+        plan.runId === event.payload.id && plan.kind === "todo_list" && plan.status === "active"
+          ? { ...plan, status: "completed" as const }
+          : plan,
+      );
+      return withLocalVisibleTurnItems({ ...base, runs, nodes, plans });
+    }
     case "run.background-work-cancelled":
       return {
         ...base,
@@ -2121,6 +2148,56 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   "$.restartCancelledBackgroundWork",
                 )}
             `;
+              if (isTerminalRunStatus(event.payload.status)) {
+                const completedAt = DateTime.formatIso(event.occurredAt);
+                yield* sql`
+                  UPDATE orchestration_v2_projection_nodes
+                  SET
+                    status = CASE kind
+                      WHEN 'todo_list' THEN 'completed'
+                      WHEN 'tool_call' THEN 'interrupted'
+                      WHEN 'approval_request' THEN 'cancelled'
+                      WHEN 'user_input_request' THEN 'cancelled'
+                      ELSE status
+                    END,
+                    completed_at = ${completedAt},
+                    payload_json = json_set(
+                      payload_json,
+                      '$.status',
+                      CASE kind
+                        WHEN 'todo_list' THEN 'completed'
+                        WHEN 'tool_call' THEN 'interrupted'
+                        WHEN 'approval_request' THEN 'cancelled'
+                        WHEN 'user_input_request' THEN 'cancelled'
+                        ELSE json_extract(payload_json, '$.status')
+                      END,
+                      '$.completedAt',
+                      ${completedAt}
+                    )
+                  WHERE run_id = ${event.payload.id}
+                    AND status IN ('pending','running','waiting')
+                    AND kind IN ${sql.in([...TERMINAL_RUN_NODE_KINDS])}
+                    AND (
+                      COALESCE(runtime_request_id, json_extract(payload_json, '$.runtimeRequestId')) IS NULL
+                      OR NOT EXISTS (
+                        SELECT 1 FROM orchestration_v2_projection_runtime_requests AS request
+                        WHERE request.runtime_request_id = COALESCE(
+                            orchestration_v2_projection_nodes.runtime_request_id,
+                            json_extract(orchestration_v2_projection_nodes.payload_json, '$.runtimeRequestId')
+                          )
+                          AND request.status = 'pending'
+                      )
+                    )
+                `;
+                yield* sql`
+                  UPDATE orchestration_v2_projection_plans
+                  SET status = 'completed',
+                    payload_json = json_set(payload_json, '$.status', 'completed')
+                  WHERE run_id = ${event.payload.id}
+                    AND kind = 'todo_list'
+                    AND status = 'active'
+                `;
+              }
               break;
             }
             case "run.background-work-cancelled": {
