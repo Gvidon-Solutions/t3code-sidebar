@@ -527,6 +527,42 @@ describe("mobile SQLite environment cache store", () => {
     }),
   );
 
+  it.effect("keeps the server snapshot origin beside the cached shell rows", () =>
+    Effect.gen(function* () {
+      const memory = makeDatabase();
+      const store = yield* make().pipe(
+        Effect.provideService(MobileDatabase.MobileDatabase, memory.database),
+      );
+      const origin = {
+        serverVersion: "0.1.8",
+        databaseMigration: 80,
+        omitIdleSubagents: true,
+        omitOlderSettled: false,
+        snapshotAt: 1_700_000_000_000,
+      };
+
+      yield* store.saveShell(ENVIRONMENT_ID, SHELL_SNAPSHOT, origin);
+
+      const shell = Option.getOrThrow(yield* store.loadShell(ENVIRONMENT_ID));
+      expect(shell.origin).toEqual(origin);
+      expect(shell.threads.map((thread) => thread.id)).toEqual([THREAD_ID]);
+    }),
+  );
+
+  it.effect("a cached shell without an origin never resumes", () =>
+    Effect.gen(function* () {
+      const memory = makeDatabase();
+      const store = yield* make().pipe(
+        Effect.provideService(MobileDatabase.MobileDatabase, memory.database),
+      );
+
+      yield* store.saveShell(ENVIRONMENT_ID, SHELL_SNAPSHOT);
+
+      const shell = Option.getOrThrow(yield* store.loadShell(ENVIRONMENT_ID));
+      expect(shell.origin).toBeUndefined();
+    }),
+  );
+
   it.live("returns cached threads before their pull request links, which load after", () =>
     Effect.gen(function* () {
       const memory = makeDatabase();

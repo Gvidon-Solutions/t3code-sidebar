@@ -40,6 +40,12 @@ vi.mock("expo-secure-store", () => ({
   },
 }));
 
+vi.mock("expo", async () => {
+  const { createNodeDpopKeysModule } = await import("./dpop.testing");
+  const dpopKeys = createNodeDpopKeysModule();
+  return { requireNativeModule: () => dpopKeys };
+});
+
 function proofIat(proof: string): number {
   const payload = proof.split(".")[1];
   if (!payload) {
@@ -86,6 +92,49 @@ describe("mobile DPoP", () => {
   it.effect("rejects malformed persisted proof keys", () =>
     Effect.gen(function* () {
       secureStore.set("t3code.cloud.dpop-proof-key", `{"kty":"EC","crv":"P-256","d":42}`);
+
+      const error = yield* loadOrCreateDpopProofKeyPair().pipe(Effect.flip);
+
+      expect(error.message).toBe("Stored DPoP proof key is invalid.");
+    }).pipe(Effect.provide(Dpop.layer)),
+  );
+
+  it.effect("rejects a persisted key whose public half belongs to another key", () =>
+    Effect.gen(function* () {
+      secureStore.clear();
+      const { privateJwk } = yield* loadOrCreateDpopProofKeyPair();
+      secureStore.clear();
+      const other = yield* loadOrCreateDpopProofKeyPair();
+      secureStore.set(
+        "t3code.cloud.dpop-proof-key",
+        JSON.stringify({ ...privateJwk, x: other.publicJwk.x, y: other.publicJwk.y }),
+      );
+
+      const error = yield* loadOrCreateDpopProofKeyPair().pipe(Effect.flip);
+
+      expect(error.message).toBe("Stored DPoP proof key is invalid.");
+    }).pipe(Effect.provide(Dpop.layer)),
+  );
+
+  // X ends in 0x00, so a zero-filled 31-byte X, or a 33-byte X whose extra byte Y overwrites,
+  // still names the same point.
+  const privateJwkWithZeroEndedX = {
+    kty: "EC" as const,
+    crv: "P-256" as const,
+    x: "TCE1CTXQ3-B54Fwv9yDlkE3rgcWsJsuGIv2Q9QHcZAA",
+    y: "zL4Eewo43mYmVjtqh597_dGnKa7lkxxB5XaQk32V9UM",
+    d: "mzWsJz_1-NerI3_NPtF_hcQhQrXnEITcNEmu5BzaDK4",
+  };
+  const xBytes = Buffer.from(privateJwkWithZeroEndedX.x, "base64url");
+  it.effect.each([
+    { length: "short", x: xBytes.subarray(0, 31) },
+    { length: "long", x: Buffer.concat([xBytes, Buffer.of(7)]) },
+  ])("rejects a persisted key with a $length coordinate", ({ x }) =>
+    Effect.gen(function* () {
+      secureStore.set(
+        "t3code.cloud.dpop-proof-key",
+        JSON.stringify({ ...privateJwkWithZeroEndedX, x: x.toString("base64url") }),
+      );
 
       const error = yield* loadOrCreateDpopProofKeyPair().pipe(Effect.flip);
 

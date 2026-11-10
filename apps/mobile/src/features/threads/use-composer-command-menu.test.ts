@@ -88,6 +88,38 @@ describe("mobile slash commands", () => {
     ).toEqual({ text: "/plan ", cursor: 6 });
   });
 
+  it("offers /side and /btw when the thread can start a side chat", () => {
+    const items = buildComposerSlashCommandItems({
+      query: "",
+      atMessageStart: true,
+      hasThread: true,
+      offersSideChat: true,
+      selectedProviderStatus: { driver: ProviderDriverKind.make("codex"), slashCommands: [] },
+    });
+    expect(items.flatMap((item) => (item.type === "slash-command" ? [item.command] : []))).toEqual([
+      "model",
+      "side",
+      "btw",
+    ]);
+    expect(
+      buildComposerSlashCommandItems({
+        query: "sid",
+        atMessageStart: true,
+        hasThread: true,
+        offersSideChat: true,
+        selectedProviderStatus: { driver: ProviderDriverKind.make("codex"), slashCommands: [] },
+      }).flatMap((item) => (item.type === "slash-command" ? [item.command] : [])),
+    ).toEqual(["side"]);
+    expect(
+      buildComposerSlashCommandItems({
+        query: "",
+        atMessageStart: true,
+        hasThread: true,
+        selectedProviderStatus: { driver: ProviderDriverKind.make("codex"), slashCommands: [] },
+      }).flatMap((item) => (item.type === "slash-command" ? [item.command] : [])),
+    ).toEqual(["model"]);
+  });
+
   it("does not offer a T3 plan command", () => {
     const items = buildComposerSlashCommandItems({
       query: "plan",

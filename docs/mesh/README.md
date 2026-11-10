@@ -1179,6 +1179,30 @@ Labs "Legacy" section. Desktop keeps `readMedia` credential-free (`credentials:"
 cross-machine `t3-thread://v2` link stays navigable in `MarkdownThreadLink` even when the
 thread is not in this sidebar.
 
+Mobile keeps the fork's screens and layout but takes upstream's under-the-hood work.
+The iOS socket now runs on the native `T3WebSocket` module (`apps/mobile/modules/t3-web-socket`)
+through `apps/mobile/src/native/nativeWebSocket.ios.ts`; it negotiates permessage-deflate and
+falls back to the global constructor for a dev client built before the module shipped. DPoP proofs
+are generated and signed by `T3NativeControls` (`dpopKeyMatches`, `generateDpopKey`, `signDpop`)
+instead of `@noble/curves`, so `features/cloud/dpop.ts` no longer carries a JS P-256 signer.
+The shell cache keeps its server-snapshot origin (`ShellCacheOrigin`) beside the rows; the thread
+list resumes from it only while the origin matches the server and is under twelve hours old, and a
+`snapshot-required` answer reloads over HTTP. Cold thread opens use the bounded socket snapshot
+once and fall back to HTTP on any failure. Because phase A restored the fork's mobile source, these
+upstream TS wrappers had to be re-ported even though their native modules and dependencies were
+already present; their tests mock `expo` with `features/cloud/dpop.testing.ts`.
+
+Mermaid and math fences render like web: `native/MermaidCodeBlock.tsx` renders Pele diagrams with
+`lib/mermaidSvg.ts` (CSS variables and `style` geometry become `react-native-svg` attributes) and
+math fences go back through Enriched Markdown with `latexMath`. Long-press an image offers "Save
+image" through `T3NativeControls.saveImageToLibrary` when the platform can write Photos without a
+permission. `/side` (and `/btw`) forks a side chat from the composer; `useStartSideChat.ts` waits
+for the new shell, sends the prompt and opens it, and the composer hides the command when the
+server lacks `capabilities.sideChats`, the thread is a side chat or subagent, or a worktree is
+still being prepared. Keyboard/IME/scroll ports cover Android hardware Return, iOS reset
+generations (a send cannot restore autocorrected text and switching drafts keeps the keyboard),
+and the thread feed's end-anchored expand/collapse and one-shot re-wrap on an iOS column resize.
+
 ## Upstream v0.1.8 toolchain
 
 Package typecheck is upstream's `effect-tsgo tsrs --noEmit`, not `tsc`; Effect

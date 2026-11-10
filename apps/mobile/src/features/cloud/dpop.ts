@@ -9,7 +9,6 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as ExpoCrypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
-import { p256 } from "@noble/curves/nist";
 import { DpopPublicJwk, normalizeDpopHtu } from "@t3tools/shared/dpopCommon";
 import * as Layer from "effect/Layer";
 
@@ -96,62 +95,37 @@ export interface DpopProofKeyPair {
 
 const DPOP_PROOF_KEY_STORAGE_KEY = "t3code.cloud.dpop-proof-key";
 
+interface NativeDpopKeys {
+  /** A 32-byte private scalar followed by its 65-byte uncompressed public point. */
+  generateDpopKey(): Promise<Uint8Array>;
+  dpopKeyMatches(privateKey: Uint8Array, publicKey: Uint8Array): Promise<boolean>;
+  /** ES256 over the signing input, as the raw 64-byte `r‖s` pair. */
+  signDpop(privateKey: Uint8Array, signingInput: Uint8Array): Promise<Uint8Array>;
+}
+
+// Platform crypto: in Hermes, @noble/curves blocks JS for about a second on its first P-256 key.
+// Imported lazily: loading `expo` at module scope breaks Node tests that import this file.
+const nativeDpopKeys = async () =>
+  (await import("expo")).requireNativeModule<NativeDpopKeys>("T3NativeControls");
+
 function base64UrlToBytes(value: string): Uint8Array {
   return Result.getOrThrow(Base64Url.decode(value));
 }
 
-function sha256Digest(
-  data: Uint8Array,
-  message: string,
-): Effect.Effect<Uint8Array, CloudDpopError, Digest.Digest> {
-  return Digest.Digest.pipe(
-    Effect.flatMap((service) => service.digest(Digest.sha256, data)),
-    Effect.mapError(cloudDpopError(message)),
-  );
+function coordinateBytes(value: string): Uint8Array {
+  const bytes = base64UrlToBytes(value);
+  if (bytes.length !== 32 || Base64Url.encode(bytes) !== value) {
+    throw new Error("DPoP key coordinate is not 32 canonical bytes.");
+  }
+  return bytes;
 }
 
-function base64UrlSha256(
-  data: Uint8Array,
-  message: string,
-): Effect.Effect<string, CloudDpopError, Digest.Digest> {
-  return sha256Digest(data, message).pipe(Effect.map(Base64Url.encode));
-}
-
-function dpopThumbprintInput(jwk: DpopPublicJwk): string {
-  return JSON.stringify({
-    crv: jwk.crv,
-    kty: jwk.kty,
-    x: jwk.x,
-    y: jwk.y,
-  });
-}
-
-function computeDpopJwkThumbprintEffect(
-  jwk: DpopPublicJwk,
-): Effect.Effect<string, CloudDpopError, Digest.Digest> {
-  return base64UrlSha256(
-    new TextEncoder().encode(dpopThumbprintInput(jwk)),
-    "Could not hash the DPoP public key thumbprint.",
-  );
-}
-
-function computeDpopAccessTokenHashEffect(
-  accessToken: string,
-): Effect.Effect<string, CloudDpopError, Digest.Digest> {
-  return base64UrlSha256(
-    new TextEncoder().encode(accessToken),
-    "Could not hash the DPoP access token.",
-  );
-}
-
-function secureRandomBytes(
-  byteCount: number,
-  message: string,
-): Effect.Effect<Uint8Array, CloudDpopError, SecureRandom.SecureRandom> {
-  return SecureRandom.SecureRandom.pipe(
-    Effect.flatMap((random) => random.randomBytes(byteCount)),
-    Effect.mapError(cloudDpopError(message)),
-  );
+function uncompressedPublicKeyFromJwk(jwk: DpopPublicJwk): Uint8Array {
+  const publicKey = new Uint8Array(65);
+  publicKey[0] = 0x04;
+  publicKey.set(coordinateBytes(jwk.x), 1);
+  publicKey.set(coordinateBytes(jwk.y), 33);
+  return publicKey;
 }
 
 function publicJwkFromUncompressedPublicKey(publicKey: Uint8Array): DpopPublicJwk {
@@ -173,26 +147,57 @@ function privateJwkFromPrivateKey(
   return { ...publicJwk, d: Base64Url.encode(privateKey) };
 }
 
+function dpopThumbprintInput(jwk: DpopPublicJwk): string {
+  return JSON.stringify({
+    crv: jwk.crv,
+    kty: jwk.kty,
+    x: jwk.x,
+    y: jwk.y,
+  });
+}
+
+function base64UrlSha256(
+  data: Uint8Array,
+  message: string,
+): Effect.Effect<string, CloudDpopError, Digest.Digest> {
+  return Digest.Digest.pipe(
+    Effect.flatMap((service) => service.digest(Digest.sha256, data)),
+    Effect.map(Base64Url.encode),
+    Effect.mapError(cloudDpopError(message)),
+  );
+}
+
+function computeDpopJwkThumbprintEffect(
+  jwk: DpopPublicJwk,
+): Effect.Effect<string, CloudDpopError, Digest.Digest> {
+  return base64UrlSha256(
+    new TextEncoder().encode(dpopThumbprintInput(jwk)),
+    "Could not hash the DPoP public key thumbprint.",
+  );
+}
+
+function computeDpopAccessTokenHashEffect(
+  accessToken: string,
+): Effect.Effect<string, CloudDpopError, Digest.Digest> {
+  return base64UrlSha256(
+    new TextEncoder().encode(accessToken),
+    "Could not hash the DPoP access token.",
+  );
+}
+
 export const generateDpopProofKeyPair = Effect.fn("dpop.generateDpopProofKeyPair")(
-  function* (): Effect.fn.Return<
-    DpopProofKeyPair,
-    CloudDpopError,
-    SecureRandom.SecureRandom | Digest.Digest
-  > {
-    let privateKey: Uint8Array;
-    do {
-      privateKey = yield* secureRandomBytes(
-        p256.CURVE.nByteLength,
-        "Could not generate DPoP key pair randomness.",
-      );
-    } while (!p256.utils.isValidPrivateKey(privateKey));
+  function* (): Effect.fn.Return<DpopProofKeyPair, CloudDpopError, Digest.Digest> {
+    const key = yield* Effect.tryPromise({
+      try: async () => (await nativeDpopKeys()).generateDpopKey(),
+      catch: cloudDpopError("Could not generate the DPoP key pair."),
+    });
     const publicJwk = yield* Effect.try({
-      try: () => publicJwkFromUncompressedPublicKey(p256.getPublicKey(privateKey, false)),
+      try: () => publicJwkFromUncompressedPublicKey(key.slice(32)),
       catch: cloudDpopError("Generated DPoP public key is invalid."),
     });
     const thumbprint = yield* computeDpopJwkThumbprintEffect(publicJwk);
     return {
-      privateJwk: privateJwkFromPrivateKey(privateKey, publicJwk),
+      privateJwk: privateJwkFromPrivateKey(key.slice(0, 32), publicJwk),
       publicJwk,
       thumbprint,
     };
@@ -200,11 +205,7 @@ export const generateDpopProofKeyPair = Effect.fn("dpop.generateDpopProofKeyPair
 );
 
 export const loadOrCreateDpopProofKeyPair = Effect.fn("dpop.loadOrCreateDpopProofKeyPair")(
-  function* (): Effect.fn.Return<
-    DpopProofKeyPair,
-    CloudDpopError,
-    SecureRandom.SecureRandom | Digest.Digest
-  > {
+  function* (): Effect.fn.Return<DpopProofKeyPair, CloudDpopError, Digest.Digest> {
     const stored = yield* Effect.tryPromise({
       try: () => SecureStore.getItemAsync(DPOP_PROOF_KEY_STORAGE_KEY),
       catch: cloudDpopError("Could not read the DPoP proof key."),
@@ -213,24 +214,20 @@ export const loadOrCreateDpopProofKeyPair = Effect.fn("dpop.loadOrCreateDpopProo
       const storedPrivateJwk = yield* decodeDpopPrivateJwkJson(stored).pipe(
         Effect.mapError(cloudDpopError("Stored DPoP proof key is invalid.")),
       );
-      const restored = yield* Effect.try({
-        try: () => {
-          const privateKey = base64UrlToBytes(storedPrivateJwk.d);
-          const publicJwk = publicJwkFromUncompressedPublicKey(
-            p256.getPublicKey(privateKey, false),
-          );
-          if (publicJwk.x !== storedPrivateJwk.x || publicJwk.y !== storedPrivateJwk.y) {
-            throw new Error("Stored DPoP key does not match its public key.");
-          }
-          return { privateJwk: storedPrivateJwk, publicJwk };
-        },
+      const { d, ...publicJwk } = storedPrivateJwk;
+      const matches = yield* Effect.tryPromise({
+        try: async () =>
+          (await nativeDpopKeys()).dpopKeyMatches(
+            base64UrlToBytes(d),
+            uncompressedPublicKeyFromJwk(publicJwk),
+          ),
         catch: cloudDpopError("Stored DPoP proof key is invalid."),
       });
-      const thumbprint = yield* computeDpopJwkThumbprintEffect(restored.publicJwk);
-      return {
-        ...restored,
-        thumbprint,
-      };
+      if (!matches) {
+        return yield* new CloudDpopError({ message: "Stored DPoP proof key is invalid." });
+      }
+      const thumbprint = yield* computeDpopJwkThumbprintEffect(publicJwk);
+      return { privateJwk: storedPrivateJwk, publicJwk, thumbprint };
     }
     const generated = yield* generateDpopProofKeyPair();
     const encodedPrivateJwk = yield* encodeDpopPrivateJwkJson(generated.privateJwk).pipe(
@@ -291,12 +288,12 @@ export const createDpopProof = Effect.fn("dpop.createDpopProof")(function* (inpu
     Effect.map(Base64Url.encode),
     Effect.mapError(cloudDpopError("Could not encode DPoP proof payload.")),
   );
-  const signatureInputHash = yield* sha256Digest(
-    new TextEncoder().encode(`${header}.${payload}`),
-    "Could not hash DPoP signing input.",
-  );
-  const signature = yield* Effect.try({
-    try: () => p256.sign(signatureInputHash, privateKey, { prehash: false }).toCompactRawBytes(),
+  const signature = yield* Effect.tryPromise({
+    try: async () =>
+      (await nativeDpopKeys()).signDpop(
+        privateKey,
+        new TextEncoder().encode(`${header}.${payload}`),
+      ),
     catch: cloudDpopError("Could not sign DPoP proof."),
   });
   return {

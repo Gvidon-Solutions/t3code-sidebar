@@ -163,4 +163,10 @@ describe("typing immediately before an intercepted paste", () => {
     expect(isComposerNativeEcho("pasted", { start: 6, end: 6 }, 2, snapshots)).toBe(false);
     expect(acknowledgeComposerNativeEvent(2, 1)).toBeNull();
   });
+
+  it("drops an event from before the editor applied a parent reset", () => {
+    expect(acknowledgeComposerNativeEvent(2, 3, 5, 4)).toBeNull();
+    expect(acknowledgeComposerNativeEvent(2, 3, 5, 6)).toBe(3);
+    expect(acknowledgeComposerNativeEvent(2, 3)).toBe(3);
+  });
 });
