@@ -162,12 +162,20 @@ async function buildRuntimes(cache) {
           NodePath.join(versionSource, "apps/server/package.json"),
           JSON.stringify({ ...original, version }, null, 2),
         );
-        await measured("pack-" + version, () =>
-          run(NodePath.join(repo, "node_modules/.bin/vp"), ["pack"], {
-            cwd: NodePath.join(versionSource, "apps/server"),
-            env: { ...process.env, T3CODE_PACK_EXE: "1", T3CODE_MESH_TEST_BUILD: "1" },
-          }),
-        );
+        // Same two passes as `cli.ts build-exe`: the CLI bundle into an asset dir, then the executable.
+        const cliAssetDir = await NodeFSP.mkdtemp(NodePath.join(root, "cli-asset-" + version + "-"));
+        for (const packMode of ["bundle", "1"])
+          await measured("pack-" + packMode + "-" + version, () =>
+            run(NodePath.join(repo, "node_modules/.bin/vp"), ["pack"], {
+              cwd: NodePath.join(versionSource, "apps/server"),
+              env: {
+                ...process.env,
+                T3CODE_PACK_EXE: packMode,
+                T3CODE_CLI_ASSET_DIR: cliAssetDir,
+                T3CODE_MESH_TEST_BUILD: "1",
+              },
+            }),
+          );
         await webBuild;
         await NodeFSP.mkdir(NodePath.join(versionSource, "apps/server/dist"), { recursive: true });
         await NodeFSP.cp(
@@ -223,11 +231,18 @@ async function buildRuntimes(cache) {
           NodePath.join(extracted, ".mesh-fast-fixture"),
           "Test build; never publish\n",
         );
-        if (version === "0.1.6")
+        if (version === "0.1.6") {
           await NodeFSP.copyFile(
             NodePath.join(versionSource, "apps/server/dist-exe/bin.mjs"),
             NodePath.join(root, "0.1.6/bin.mjs"),
           );
+          // The bootstrap keeps `./binMain.ts` external; the executable embeds it, so the plain
+          // Node entry needs the CLI bundle from the first pack pass beside it.
+          await NodeFSP.copyFile(
+            NodePath.join(cliAssetDir, "binMain.mjs"),
+            NodePath.join(root, "0.1.6/binMain.ts"),
+          );
+        }
       }),
     );
     await NodeFSP.writeFile(
