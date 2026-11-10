@@ -1,4 +1,5 @@
 import { expect, it } from "vite-plus/test";
+import * as Schema from "effect/Schema";
 import {
   CommandId,
   EnvironmentId,
@@ -288,10 +289,10 @@ it("uses plain text for a launch failure instead of a stringified cause", async 
   const outbox = new PendingDraftOutbox(storage);
   await outbox.enqueue(send);
   await outbox.drain(registered, async () => {
-    class RpcClientError extends Error {
-      readonly _tag = "RpcClientError";
-    }
-    throw new RpcClientError("Machine did not answer");
+    class RpcClientError extends Schema.TaggedError<RpcClientError>()("RpcClientError", {
+      message: Schema.String,
+    }) {}
+    throw new RpcClientError({ message: "Machine did not answer" });
   });
   expect(outbox.getSnapshot()[0]?.error).toBe("Machine did not answer");
 });
