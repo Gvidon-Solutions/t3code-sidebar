@@ -647,9 +647,12 @@ export const make = Effect.gen(function* () {
                 const serverHost = serverUiRendererId(requestUrl.host) !== undefined;
                 // Server-host documents require the main-frame navigation recorded for this
                 // renderer. Subframe navigations are subresources and never get credentials.
-                const isDocument = serverHost
-                  ? navigations.get(rendererId) === request.url
-                  : request.mode === "navigate" || navigations.get(rendererId) === request.url;
+                // The bundled app shell's window URL is trusted and carries no credentials.
+                const isDocument =
+                  navigations.get(rendererId) === request.url ||
+                  (!serverHost &&
+                    requestUrl.host === DESKTOP_HOST &&
+                    requestUrl.searchParams.has("desktopWindowId"));
                 if (isDocument) navigations.delete(rendererId);
                 const id = requestUrl.searchParams.get("desktopWindowId");
                 if (
