@@ -14,6 +14,16 @@ const { handleMock, netFetchMock, unhandleMock } = vi.hoisted(() => ({
 vi.mock("electron", () => ({
   net: { fetch: netFetchMock },
   protocol: { handle: handleMock, unhandle: unhandleMock },
+  session: {
+    fromPartition: () => ({
+      fetch: netFetchMock,
+      cookies: { get: async () => [], remove: async () => undefined },
+    }),
+    defaultSession: {
+      fetch: netFetchMock,
+      cookies: { get: async () => [], remove: async () => undefined },
+    },
+  },
 }));
 
 import * as ElectronProtocol from "./ElectronProtocol.ts";
@@ -387,6 +397,7 @@ describe("ElectronProtocol", () => {
         handler!(navigation("t3code://app/?desktopWindowId=1")),
       );
       const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() => handler!(navigation("t3code://app/?desktopWindowId=1")));
       yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
@@ -463,6 +474,7 @@ describe("ElectronProtocol", () => {
       assert.equal(forwarded.get("authorization"), "Bearer good-token");
 
       credential = { authorization: "expired-token", environmentId: "studio" };
+      yield* Effect.promise(() => handler!(navigation("t3code://app/?desktopWindowId=1")));
       const fallback = yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
@@ -512,6 +524,7 @@ describe("ElectronProtocol", () => {
         handler!(navigation("t3code://app/?desktopWindowId=1")),
       );
       const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() => handler!(navigation("t3code://app/?desktopWindowId=1")));
       yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
@@ -552,6 +565,7 @@ describe("ElectronProtocol", () => {
 
       setCookies = ["session=; Max-Age=0; Path=/"];
       netFetchMock.mockResolvedValue(documentResponse());
+      yield* Effect.promise(() => handler!(navigation("t3code://app/?desktopWindowId=1")));
       yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
@@ -715,6 +729,7 @@ describe("ElectronProtocol", () => {
       assert.equal((preflightCall[1] as RequestInit).credentials, "omit");
 
       state.preflight = "false";
+      yield* Effect.promise(() => handler!(navigation("t3code://app/?desktopWindowId=1")));
       const rejected = yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
@@ -767,6 +782,7 @@ describe("ElectronProtocol", () => {
         handler!(navigation("t3code://app/?desktopWindowId=1")),
       );
       const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() => handler!(navigation("t3code://app/?desktopWindowId=1")));
       yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
@@ -839,6 +855,7 @@ describe("ElectronProtocol", () => {
         handler!(navigation("t3code://app/?desktopWindowId=1")),
       );
       const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() => handler!(navigation("t3code://app/?desktopWindowId=1")));
       yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
@@ -865,4 +882,138 @@ describe("ElectronProtocol", () => {
       assert.isNull(forwarded.get("cookie"));
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
+  it.effect("never injects credentials into a server-host subframe navigation", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(directory + "/index.html", "bundled");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        sourceSalt: "test-salt",
+        serverOrigin: async () => new URL("https://studio.example/"),
+        serverAuthorization: async () => ({
+          authorization: "owner-bearer",
+          environmentId: "studio",
+        }),
+        clerkFrontendApiHostname: undefined,
+      });
+      netFetchMock.mockImplementation(async (url: string) => {
+        if (String(url).endsWith("/api/auth/session")) {
+          return Response.json({ authenticated: true });
+        }
+        if (String(url).includes("preview.html")) {
+          return new Response("<html>preview</html>", {
+            headers: { "content-type": "text/html" },
+          });
+        }
+        return new Response("server", {
+          headers: {
+            "content-type": "text/html",
+            "t3-desktop-ui-protocol": "1",
+            "t3-desktop-bridge": "reduced-1",
+          },
+        });
+      });
+      const redirect = yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1")),
+      );
+      const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() =>
+        handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
+      );
+      const token = yield* protocol.serverUiRequestTokenFor(new URL(pageUrl).host);
+      assert.ok(token);
+
+      // A subframe POST cannot use the document branch and gets no credentials.
+      const iframePost = yield* Effect.promise(() =>
+        handler!(
+          navigation(new URL("api/iframe", pageUrl).toString(), {
+            method: "POST",
+            headers: { "content-type": "text/plain", "sec-fetch-site": "cross-site" },
+            body: "side effect",
+          }),
+        ),
+      );
+      assert.equal(iframePost.status, 403);
+      assert.isFalse(netFetchMock.mock.calls.some(([url]) => String(url).includes("/api/iframe")));
+
+      // A subframe navigation without the UI headers must not redirect or clear the source.
+      const iframePage = yield* Effect.promise(() =>
+        handler!(
+          navigation(new URL("preview.html", pageUrl).toString(), {
+            headers: { accept: "text/html", "sec-fetch-site": "same-origin" },
+          }),
+        ),
+      );
+      assert.equal(iframePage.status, 200);
+      const forwarded = yield* Effect.promise(() =>
+        handler!(
+          new Request(new URL("api/thing", pageUrl), {
+            headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": token },
+          }),
+        ),
+      );
+      assert.equal(forwarded.status, 200);
+      const mainSubresource = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
+      assert.equal(mainSubresource.get("authorization"), "Bearer owner-bearer");
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
+  it.effect("does not evict a live source for a forged server-host navigation", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(directory + "/index.html", "bundled");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        sourceSalt: "test-salt",
+        serverOrigin: async () => new URL("https://studio.example/"),
+        serverAuthorization: async () => ({ authorization: "owner-bearer", environmentId: "studio" }),
+        clerkFrontendApiHostname: undefined,
+      });
+      netFetchMock.mockImplementation(async (url: string) => {
+        if (String(url).endsWith("/api/auth/session")) return Response.json({ authenticated: true });
+        return new Response("server", {
+          headers: {
+            "content-type": "text/html",
+            "t3-desktop-ui-protocol": "1",
+            "t3-desktop-bridge": "reduced-1",
+          },
+        });
+      });
+      const redirect = yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1")),
+      );
+      const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() => handler!(navigation(pageUrl, { headers: { accept: "text/html" } })));
+      const forged = yield* Effect.promise(() =>
+        handler!(navigation(`t3code://server-1-${"f".repeat(24)}/`)),
+      );
+      assert.equal(forged.status, 404);
+      const token = yield* protocol.serverUiRequestTokenFor(new URL(pageUrl).host);
+      assert.ok(token);
+      const live = yield* Effect.promise(() =>
+        handler!(
+          new Request(new URL("api/thing", pageUrl), {
+            headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": token },
+          }),
+        ),
+      );
+      assert.equal(live.status, 200);
+      const forwarded = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
+      assert.equal(forwarded.get("authorization"), "Bearer owner-bearer");
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
+
 });

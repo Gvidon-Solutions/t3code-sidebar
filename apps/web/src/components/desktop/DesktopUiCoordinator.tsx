@@ -14,6 +14,12 @@ import {
 import { resolveServerUiSource } from "./serverUiSource";
 import { withoutBundledFallback } from "./desktopBundledFallback";
 
+export function shouldRetryBundledSource(
+  source: Pick<DesktopUiInfo, "source" | "reason">,
+): boolean {
+  return source.source === "bundled" && (source.reason?.includes("authentication failed") ?? false);
+}
+
 function serverUiSelectionUrl(httpBaseUrl: string, shellOrigin: string | undefined): string {
   try {
     const protocol = new URL(httpBaseUrl).protocol;
@@ -101,7 +107,7 @@ export function DesktopUiCoordinator() {
       if (!changed) {
         // A rejected server UI is retried after its TTL; keep this bundled app polling
         // so a plain document load can pick the server UI up again.
-        if (loaded.source === "bundled" && environmentId !== null) {
+        if (shouldRetryBundledSource(loaded) && environmentId !== null) {
           const timer = setTimeout(() => setRetryNonce((value) => value + 1), 30_000);
           cancelReload = () => clearTimeout(timer);
         }
