@@ -350,6 +350,41 @@ Shared client-runtime decisions keep web and Android answering these questions t
   `aria-disabled` while staying focusable. Unconnected catalogs refresh only while a machine is
   unconnected, with one bounded request key per project and destination.
 
+### Dictation and voice conversations
+
+Dictation (speech to text) and a voice conversation (realtime audio with the agent) are two
+features with two entry points and no shared names. The composer's microphone button dictates into
+the input; the audio-lines toggle (and the `/voice` slash command, "Talk", the keybinding and the
+command palette) starts a voice conversation. `apps/server/src/speech/*` and the `/api/voice/*`
+HTTP group own transcription; `SpeechService`, `SpeechModelStore`, `CloudSpeech` and
+`apps/server/src/speech/catalog.json` (Parakeet, Whisper, Moonshine, Nemotron) were taken from
+upstream, and models download to the machine the user chooses.
+
+- **Web.** `apps/web/src/speech/useEnvironmentSpeechInput.ts` drives both the composer and the
+  first-run `VoiceInputSetup` wizard; `components/chat/ComposerSpeechButton.tsx` is dictation,
+  `components/chat/ComposerVoiceToggle.tsx` is the voice conversation. Settings › Voice
+  (`components/settings/VoiceSettingsPanel.tsx`) holds the destination (`useVoiceTranscriptionDestination`),
+  model browser and download, cloud keys and the microphone order.
+- **Mobile.** `features/voice-input/voiceDestination.ts` is the one route decision: a device-local
+  grant (SecureStore plus a marker file in `voiceGrantStorage.ts`) names either `This device`,
+  a paired environment, or a cloud provider. `environmentTranscriber.ts` normalizes the recording
+  to 16 kHz mono float PCM and uploads it to that environment; a lost grant or a changed
+  destination cancels before upload. `features/settings/SettingsVoiceRouteScreen.tsx` is Settings ›
+  Voice (destination, model section, cloud section, microphone order and permission);
+  `SettingsVoiceModelsRouteScreen.tsx` is the searchable model picker. The composer renders
+  "Start dictation" (mic) next to "Start voice conversation" (waveform), both behind the same
+  one-microphone session so they never run at once.
+- **Android transcribe-while-recording.** `native/voiceTranscription.android.ts` exposes a live
+  recorder (`LiveVoiceRecorder` over Android 12+ ML Kit) and `prepared.start`, so the composer
+  records while the recognizer streams; `native/voiceRecorder.android.ts` selects it for local
+  dictation and falls back to the plain `expo-audio` recorder only when the live module is absent.
+  iOS `native/voiceTranscription.ios.ts` tries the user's ordered Languages & Region list before
+  the app locale and starts recording while Apple prepares its model.
+- **Lesson.** Dictation availability is `voiceInputAvailableAtom`: it must include the chosen
+  environment route, not only the local transcriber, or the composer hides the microphone on a
+  phone whose own speech service is missing. Editing the provider under Metro Fast Refresh leaves
+  the old atom graph in place; relaunch the dev client to see a changed availability atom.
+
 ### Client fallback, home and draft choice
 
 - **Desktop fallback.** `ElectronProtocol` appends the attempted `server` to the bundled
