@@ -460,9 +460,9 @@ async function main() {
       },
       {
         _tag: "BearerConnectionTarget",
-        connectionId: "joseph",
-        environmentId: "joseph",
-        label: "joseph",
+        connectionId: "atlas",
+        environmentId: "atlas",
+        label: "atlas",
       },
     ],
     profiles: [
@@ -484,11 +484,11 @@ async function main() {
       },
       {
         _tag: "BearerConnectionProfile",
-        connectionId: "joseph",
-        environmentId: "joseph",
-        label: "joseph",
-        httpBaseUrl: "http://127.0.0.1:3775/",
-        wsBaseUrl: "ws://127.0.0.1:3775/",
+        connectionId: "atlas",
+        environmentId: "atlas",
+        label: "atlas",
+        httpBaseUrl: "http://127.0.0.1:4080/",
+        wsBaseUrl: "ws://127.0.0.1:4080/",
       },
     ],
     credentials: [
@@ -501,13 +501,13 @@ async function main() {
         credential: { _tag: "BearerConnectionCredential", token: cloudboxToken },
       },
       {
-        connectionId: "joseph",
+        connectionId: "atlas",
         credential: { _tag: "BearerConnectionCredential", token: "disabled-token" },
       },
     ],
     remoteDpopTokens: [],
     // The live Windows desktop keeps one saved connection toggled off.
-    disabledEnvironmentIds: ["joseph"],
+    disabledEnvironmentIds: ["atlas"],
   };
   const info = {
     source: "server",

@@ -671,7 +671,7 @@ describe("Desktop connected UI source", () => {
       const entries = [
         { environmentId: "studio", httpBaseUrl: "https://studio.example", disabled: false },
         { environmentId: "cloudbox", httpBaseUrl: "https://cloudbox.example", disabled: false },
-        { environmentId: "joseph", httpBaseUrl: "http://127.0.0.1:3775", disabled: true },
+        { environmentId: "atlas", httpBaseUrl: "http://127.0.0.1:4080", disabled: true },
       ];
       const raw = yield* Ref.make(
         JSON.stringify({
@@ -698,7 +698,7 @@ describe("Desktop connected UI source", () => {
             },
           })),
           remoteDpopTokens: [],
-          disabledEnvironmentIds: ["joseph"],
+          disabledEnvironmentIds: ["atlas"],
         }),
       );
       const ui = yield* make.pipe(
@@ -730,8 +730,8 @@ describe("Desktop connected UI source", () => {
 
       for (const selection of [
         {
-          environmentId: EnvironmentId.make("joseph"),
-          httpBaseUrl: "http://127.0.0.1:3775/",
+          environmentId: EnvironmentId.make("atlas"),
+          httpBaseUrl: "http://127.0.0.1:4080/",
         },
         {
           environmentId: EnvironmentId.make("unknown-machine"),
@@ -755,8 +755,8 @@ describe("Desktop connected UI source", () => {
       yield* fs.writeFileString(
         stateDir + "/ui-source.json",
         JSON.stringify({
-          environmentId: "joseph",
-          httpBaseUrl: "http://127.0.0.1:3775/",
+          environmentId: "atlas",
+          httpBaseUrl: "http://127.0.0.1:4080/",
           serverVersion: "0.1.7",
         }),
       );
