@@ -114,9 +114,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **What.** Desktop server UI can authenticate again. Its HTTP is first-party through the shell
   proxy, so the pairing cookie survives; the proxy holds the session cookie and the bearer the
   trusted bundled client hands over at selection, and the reduced renderer never sees either.
-  The server-UI origin uses a salt persisted once per install, so drafts survive restarts.
-  WebSocket, preview streams and device mirroring use short-lived RPC/media tickets minted
-  through the same proxy, and credentialed subresources carry a per-window proof header. If the server rejects the shell's credential, the bundled client opens
+  The server-UI origin uses a salt persisted once per install, so drafts survive restarts
+  (the window id remains per process; the main window is stable in practice). Only a recorded
+  main-frame navigation is a document, so sandboxed iframe previews/MCP apps cannot get
+  credentials, redirect the window or clear its source. WebSocket, preview streams and device
+  mirroring use short-lived RPC/media tickets minted through the same proxy, and credentialed
+  subresources carry a per-window proof header. If the server rejects the shell's credential, the bundled client opens
   in its normal state (not the offline page) and connects through the saved bearer connection. A chunk or CSS preload failure during a server restart now shows
   "Reconnecting to <machine>…" and reloads when the server answers, instead of the boot error.
   A whole pairing link (including `t3code://pair?pairingUrl=`) can be pasted into the pairing
