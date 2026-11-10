@@ -21,7 +21,7 @@ it.effect(
         Settings.layerTest(),
         Layer.mock(ThreadManagementService)({}),
         Layer.mock(McpSessionRegistry)({
-          // @effect-diagnostics-next-line effectSucceedWithVoid:off -- Registry misses return undefined rather than void.
+          // @effect-diagnostics-next-line effectSucceedWithUndefined:off -- Registry misses return undefined rather than void.
           resolve: () => Effect.succeed(undefined),
         }),
         Layer.succeed(Mcp.McpClientAuthenticator, {

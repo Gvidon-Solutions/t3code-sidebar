@@ -66,13 +66,20 @@ export const layer = Layer.effect(
           }
           yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
           yield* fs.remove(destination + ".tmp", { force: true });
-          yield* Effect.tryPromise(async () => {
-            const database = new NodeSqlite.DatabaseSync(config.dbPath, { readOnly: true });
-            try {
-              await NodeSqlite.backup(database, destination + ".tmp");
-            } finally {
-              database.close();
-            }
+          yield* Effect.tryPromise({
+            try: async () => {
+              const database = new NodeSqlite.DatabaseSync(config.dbPath, { readOnly: true });
+              try {
+                await NodeSqlite.backup(database, destination + ".tmp");
+              } finally {
+                database.close();
+              }
+            },
+            catch: (cause) =>
+              new MeshConfigError({
+                reason: "storage",
+                message: `State DB backup failed: ${String(cause)}`,
+              }),
           });
           yield* fs.rename(destination + ".tmp", destination);
           yield* prune(directory);

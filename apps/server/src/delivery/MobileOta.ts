@@ -19,6 +19,21 @@ import {
 const decodeCatalog = Schema.decodeEffect(Schema.fromJsonString(OtaCatalog));
 const decodeManifest = Schema.decodeEffect(Schema.fromJsonString(OtaManifest));
 
+class MobileOtaError extends Schema.TaggedError<MobileOtaError>()("MobileOtaError", {
+  operation: Schema.String,
+  cause: Schema.Defect(),
+}) {
+  override get message() {
+    return `Mobile OTA ${this.operation} failed.`;
+  }
+}
+
+const attemptOta = <A>(operation: string, try_: () => A) =>
+  Effect.try({
+    try: try_,
+    catch: (cause) => new MobileOtaError({ operation, cause }),
+  });
+
 const headers = {
   "expo-protocol-version": "1",
   "expo-sfv-version": "0",
@@ -51,7 +66,7 @@ export const layer = Layer.effect(
     let cached:
       | {
           stamp: string;
-          catalog: typeof OtaCatalog.Type;
+          catalog: OtaCatalog;
           assets: ReadonlyMap<string, typeof OtaManifest.Type.launchAsset>;
         }
       | undefined;
@@ -95,7 +110,7 @@ export const layer = Layer.effect(
         if (!(yield* fs.exists(path.join(root, "catalog.json"))))
           return HttpServerResponse.empty({ status: 204, headers });
         const { catalog } = yield* readCatalog();
-        const release = yield* Effect.try(() =>
+        const release = yield* attemptOta("release selection", () =>
           selectOtaRelease(
             catalog,
             request["expo-platform"]!,
@@ -106,7 +121,9 @@ export const layer = Layer.effect(
         );
         if (!release) return HttpServerResponse.empty({ status: 204, headers });
         const certificate = yield* fs.readFileString(path.join(root, "certificate.pem"));
-        const verified = yield* Effect.try(() => verifyOtaRelease(release, certificate));
+        const verified = yield* attemptOta("release verification", () =>
+          verifyOtaRelease(release, certificate),
+        );
         return HttpServerResponse.text(release.manifest, {
           headers: {
             ...headers,
@@ -129,7 +146,7 @@ export const layer = Layer.effect(
         const known = assets.get(key);
         if (!known) return HttpServerResponse.empty({ status: 404 });
         const bytes = yield* fs.readFile(path.join(root, "assets", key));
-        yield* Effect.try(() => verifyOtaAsset(key, bytes));
+        yield* attemptOta("asset verification", () => verifyOtaAsset(key, bytes));
         return HttpServerResponse.uint8Array(bytes, {
           headers: {
             "content-type": known.contentType,

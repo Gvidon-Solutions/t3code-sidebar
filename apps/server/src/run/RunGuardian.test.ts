@@ -52,7 +52,10 @@ it.live("stops forwarding for an expired job and bounds its diagnostic log", () 
       vi.mocked(remoteRun)
         .mockImplementationOnce(async (_plan, _request, options) => {
           await options.onFrame({ type: "ready", id });
-          throw new RunRemoteError("expired ".repeat(20_000), "job_not_found");
+          throw new RunRemoteError({
+            detail: "expired ".repeat(20_000),
+            reason: "job_not_found",
+          });
         })
         .mockImplementationOnce(async () => {
           retryEntered.resolve();

@@ -1,8 +1,10 @@
-export class RunRemoteError extends Error {
-  readonly reason: "job_not_found" | undefined;
-  constructor(message: string, reason?: "job_not_found") {
-    super(message);
-    this.name = "RunRemoteError";
-    this.reason = reason;
+import * as Schema from "effect/Schema";
+
+export class RunRemoteError extends Schema.TaggedError<RunRemoteError>()("RunRemoteError", {
+  detail: Schema.String,
+  reason: Schema.optionalKey(Schema.Literals(["job_not_found"])),
+}) {
+  override get message() {
+    return this.detail;
   }
 }

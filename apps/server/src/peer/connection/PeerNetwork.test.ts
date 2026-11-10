@@ -242,7 +242,7 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       Layer.provide(OAuth.layerMcpClientAuthenticator),
       Layer.provide(
         Layer.mock(Registry.McpSessionRegistry)({
-          // @effect-diagnostics-next-line effectSucceedWithVoid:off -- The registry returns an optional invocation, not void.
+          // @effect-diagnostics-next-line effectSucceedWithUndefined:off -- The registry returns an optional invocation, not void.
           resolve: () => Effect.succeed(undefined),
         }),
       ),

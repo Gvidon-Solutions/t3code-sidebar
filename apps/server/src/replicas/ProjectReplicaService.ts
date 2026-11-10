@@ -628,13 +628,13 @@ const make = Effect.gen(function* () {
               }).pipe(Effect.mapError(mapError)),
             )
             .pipe(
-              Effect.catch((error) =>
+              Effect.tapError((error) =>
                 publishPlacement({
                   ...status,
                   state: "error",
                   message: `environment: failed: ${error.message}`,
                   problems: [error.message],
-                }).pipe(Effect.andThen(Effect.fail(error))),
+                }),
               ),
             );
           yield* register(logicalKey, rep);

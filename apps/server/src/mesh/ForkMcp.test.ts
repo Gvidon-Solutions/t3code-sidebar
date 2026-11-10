@@ -39,7 +39,7 @@ it.effect(
             Layer.succeedContext(services),
             Layer.succeed(MeshLayoutService, mesh),
             Layer.mock(McpSessionRegistry)({
-              // @effect-diagnostics-next-line effectSucceedWithVoid:off - Registry absence requires undefined.
+              // @effect-diagnostics-next-line effectSucceedWithUndefined:off - Registry absence requires undefined.
               resolve: () => Effect.succeed(undefined),
             }),
             Layer.succeed(Mcp.McpClientAuthenticator, {
