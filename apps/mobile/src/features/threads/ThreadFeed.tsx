@@ -187,7 +187,6 @@ import {
 import { cn } from "../../lib/cn";
 import {
   deriveCenteredContentHorizontalPadding,
-  deriveThreadFeedInitialContentInset,
   deriveThreadWorkLogSizing,
   type LayoutVariant,
 } from "../../lib/layout";
@@ -217,6 +216,7 @@ import {
   resolveThreadFeedLiveFollow,
   resolveThreadFeedReflowAnchor,
   resolveThreadFeedReflowScroll,
+  shouldHoldThreadFeedEnd,
   type ThreadFeedLiveFollowEvent,
   type ThreadFeedReflowAnchor,
   type ThreadWorkGroupScrollPosition,
@@ -307,6 +307,10 @@ const FEED_REFLOW_SETTLE_MS = 200;
 // A fold resizes the feed in steps about 200ms apart. Holding the place taken at the first step
 // across all of them keeps a passing moment off the end from re-anchoring the rest to a row.
 const FEED_REFLOW_HOLD_MS = 600;
+// A thread opens before its rows have measured. Keep the end pinned through the live snapshot
+// and the re-measures that follow, and release it once the feed has been quiet briefly.
+const FEED_OPEN_END_QUIET_MS = 600;
+const FEED_OPEN_END_MAX_MS = 10_000;
 const USER_BUBBLE_HORIZONTAL_PADDING = 3.5 * 3.5;
 const ASSISTANT_ROW_HORIZONTAL_PADDING = 3.5;
 
@@ -2717,7 +2721,8 @@ export const ThreadFeed = memo(function ThreadFeed({
     onEndFollowEnabledChange?.(enabled);
   };
   const transitionEndFollow = (event: ThreadFeedLiveFollowEvent) => {
-    setEndFollow(resolveThreadFeedLiveFollow(endFollowEnabledRef.current, event));
+    const next = resolveThreadFeedLiveFollow(endFollowEnabledRef.current, event);
+    setEndFollow(next);
   };
   // Capture the reader's anchor before width reflow; LegendList thresholds see only new geometry.
   // iOS preserves it during re-measures. Android restores after because following disables MVCP.
@@ -2732,6 +2737,59 @@ export const ThreadFeed = memo(function ThreadFeed({
     if (reflowAnchorRef.current === undefined) return;
     reflowAnchorRef.current = undefined;
     setReflowFollowsEnd(false);
+  };
+  const openEndHoldRef = useRef<{
+    readonly startedAt: number;
+    lastActivityAt: number;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const finishOpenEndHold = () => {
+    const hold = openEndHoldRef.current;
+    if (hold?.timer != null) clearTimeout(hold.timer);
+    openEndHoldRef.current = null;
+  };
+  const holdOpenEnd = (activity: boolean) => {
+    const hold = openEndHoldRef.current;
+    if (hold === null) return;
+    // A jump to a message owns the offset; the end hold must not pull the reader back.
+    if (props.jumpToMessageId != null) {
+      finishOpenEndHold();
+      return;
+    }
+    const now = Date.now();
+    if (activity) hold.lastActivityAt = now;
+    const shouldHold = shouldHoldThreadFeedEnd({
+      following: endFollowEnabledRef.current,
+      userScrolling: userScrollSessionRef.current,
+      atEnd: listRef.current?.getState().isAtEnd ?? false,
+      startedAt: hold.startedAt,
+      lastActivityAt: hold.lastActivityAt,
+      now,
+      quietMs: FEED_OPEN_END_QUIET_MS,
+      maxMs: FEED_OPEN_END_MAX_MS,
+    });
+    if (!shouldHold) {
+      finishOpenEndHold();
+      return;
+    }
+    // Pin the true end again as rows finish measuring and the live snapshot replaces the cache.
+    void listRef.current?.scrollToEnd({ animated: false });
+    if (hold.timer !== null) clearTimeout(hold.timer);
+    hold.timer = setTimeout(() => holdOpenEnd(false), FEED_OPEN_END_QUIET_MS);
+  };
+  const holdOpenEndOnFeedChange = useEffectEvent(() => holdOpenEnd(true));
+  const startOpenEndHold = () => {
+    if (
+      !endFollowEnabledRef.current ||
+      userScrollSessionRef.current ||
+      props.jumpToMessageId != null
+    ) {
+      return;
+    }
+    finishOpenEndHold();
+    const now = Date.now();
+    openEndHoldRef.current = { startedAt: now, lastActivityAt: now, timer: null };
+    holdOpenEnd(false);
   };
   const [interactionState, setInteractionState] = useState<{
     readonly copiedRowId: string | null;
@@ -2807,11 +2865,6 @@ export const ThreadFeed = memo(function ThreadFeed({
   const bottomContentInset = props.contentBottomInset ?? 18;
   const usesNativeAutomaticInsets =
     props.usesAutomaticContentInsets === true && Platform.OS === "ios";
-  const initialContentInset = deriveThreadFeedInitialContentInset({
-    platform: Platform.OS,
-    usesNativeAutomaticInsets,
-    bottomContentInset,
-  });
   // LegendList cannot see UIKit's adjustedContentInset; include header height in anchor offsets.
   const navigationHeaderHeight = useContext(HeaderHeightContext);
   const anchorTopInset = usesNativeAutomaticInsets
@@ -3296,6 +3349,7 @@ export const ThreadFeed = memo(function ThreadFeed({
   const handleScrollBeginDrag = () => {
     clearUserScrollSettle();
     userScrollSessionRef.current = true;
+    finishOpenEndHold();
     cancelReflow();
     // Pause before the first scroll event. Otherwise a stream update can run
     // maintainScrollAtEnd between touch-down and the drag leaving its threshold.
@@ -3335,6 +3389,7 @@ export const ThreadFeed = memo(function ThreadFeed({
       clearUserScrollSettle();
       userScrollSessionRef.current = false;
       setDisclosureGap(null);
+      finishOpenEndHold();
       cancelReflow();
       transitionEndFollow({ type: "reset" });
     },
@@ -3503,6 +3558,7 @@ export const ThreadFeed = memo(function ThreadFeed({
     () => () => {
       if (userScrollSettleTimerRef.current !== null) clearTimeout(userScrollSettleTimerRef.current);
       if (reflowSettleTimerRef.current !== null) clearTimeout(reflowSettleTimerRef.current);
+      finishOpenEndHold();
       if (copyFeedbackTimeoutRef.current) clearTimeout(copyFeedbackTimeoutRef.current);
       if (disclosureMotionTimer.current !== null) clearTimeout(disclosureMotionTimer.current);
       if (disclosureSettleFrameRef.current !== null) {
@@ -3605,10 +3661,16 @@ export const ThreadFeed = memo(function ThreadFeed({
   };
 
   const handleItemSizeChanged = () => {
+    holdOpenEnd(true);
     if (disclosureAnchorKeyRef.current !== null) {
       settleDisclosureAfterLayout();
     }
   };
+
+  // The cached feed is replaced by the live snapshot after the list loads; keep the open pinned.
+  useLayoutEffect(() => {
+    holdOpenEndOnFeedChange();
+  }, [props.feed]);
 
   const shouldRestoreVisibleContentPosition = (entry: ThreadFeedRow) => {
     const disclosureAnchorKey = disclosureAnchorKeyRef.current;
@@ -3872,8 +3934,6 @@ export const ThreadFeed = memo(function ThreadFeed({
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
             contentInsetEndAdjustment={props.contentInsetEndAdjustment}
             keyboardOffset={props.keyboardOffset}
-            // Seed composer height until keyboard integration reports it, or Android's initial end scroll runs too early.
-            {...(initialContentInset ? { contentInset: initialContentInset } : {})}
             freeze={props.freeze}
             // Follow the measured end immediately; animating estimates races row measurement on acknowledgement.
             maintainScrollAtEnd={
@@ -3935,6 +3995,7 @@ export const ThreadFeed = memo(function ThreadFeed({
             onLoad={() => {
               loadedListKeyRef.current = listMountKey;
               setLoadedListKey(listMountKey);
+              startOpenEndHold();
             }}
             // Row positions start below the header; the reflow anchor converts between them.
             onMetricsChange={(metrics) => {

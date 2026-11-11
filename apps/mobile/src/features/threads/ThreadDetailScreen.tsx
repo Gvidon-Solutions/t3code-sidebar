@@ -138,6 +138,7 @@ import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderE
 import {
   ANDROID_READING_MAX_WIDTH,
   CHAT_CONTENT_MAX_WIDTH,
+  deriveThreadFeedEndCoverage,
   type LayoutVariant,
 } from "../../lib/layout";
 import { editPendingThreadMessage } from "../../state/edit-pending-thread-message";
@@ -1003,6 +1004,17 @@ function ThreadDetailBody(
       ? deviceType !== "duo-unfolded" || (composerOwnsKeyboard && !sidebarSearchActive)
       : !keyboardStateSuspect;
   const estimatedOverlayHeight = composerOverlapHeight;
+  const composerFeedBottomExtra =
+    Platform.OS === "android" ? Math.max(0, controlInsets.bottom) : 0;
+  // The keyboard integration subtracts the composer's bottom gutter from the keyboard padding,
+  // but the composer still stacks above the keyboard, so its end would sit under the gutters' line.
+  const keyboardComposerClearance =
+    Platform.OS === "android" && isKeyboardVisible ? composerKeyboardOffset : 0;
+  const composerFeedCoverage = deriveThreadFeedEndCoverage({
+    platform: Platform.OS,
+    composerHeight: estimatedOverlayHeight,
+    bottomControlInset: controlInsets.bottom,
+  });
   // UIKit adds safe-area bottom to overlay insets; subtract here and include it in ThreadFeed scroll math.
   const nativeInsetOvercount =
     props.usesAutomaticContentInsets === true && Platform.OS === "ios" ? insets.bottom : 0;
@@ -1134,13 +1146,17 @@ function ThreadDetailBody(
   const userInputCoverageApplies = Platform.OS === "ios" && activeUserInputRequestId !== null;
   const questionStatusSpace = useAnimatedStyle(() => ({ height: floatingControlCoverage.value }));
   const combinedContentInsetEndAdjustment = useSharedValue(
-    Math.max(0, estimatedOverlayHeight - nativeInsetOvercount),
+    Math.max(0, estimatedOverlayHeight - nativeInsetOvercount) +
+      composerFeedBottomExtra +
+      keyboardComposerClearance,
   );
   useAnimatedReaction(
     () =>
       questionInFlow
         ? 0
         : contentInsetEndAdjustment.value +
+          composerFeedBottomExtra +
+          keyboardComposerClearance +
           floatingControlCoverage.value +
           (userInputCoverageApplies
             ? userInputInsetProgress.value * userInputCardCoverage.value
@@ -1148,7 +1164,7 @@ function ThreadDetailBody(
     (value) => {
       combinedContentInsetEndAdjustment.set(value);
     },
-    [questionInFlow, userInputCoverageApplies],
+    [questionInFlow, userInputCoverageApplies, composerFeedBottomExtra, keyboardComposerClearance],
   );
   const composerPopoverLift = useDerivedValue(() =>
     withTiming(
@@ -1414,11 +1430,11 @@ function ThreadDetailBody(
       {props.draftMode ? (
         props.draftMode.content(
           navigationHeaderHeight,
-          liveKeyboardHeight + estimatedOverlayHeight + 24,
+          liveKeyboardHeight + composerFeedCoverage + 24,
           screenAreaHeight -
             navigationHeaderHeight -
             liveKeyboardHeight -
-            estimatedOverlayHeight -
+            composerFeedCoverage -
             24,
         )
       ) : showContent ? (
@@ -1444,7 +1460,7 @@ function ThreadDetailBody(
               <RenderFailureView
                 {...fallback}
                 title="The conversation couldn't be displayed"
-                bottomInset={estimatedOverlayHeight}
+                bottomInset={composerFeedCoverage}
               />
             )}
           >
@@ -1484,7 +1500,7 @@ function ThreadDetailBody(
                 contentBottomInset={
                   questionInFlow
                     ? 0
-                    : estimatedOverlayHeight +
+                    : composerFeedCoverage +
                       (showFloatingStatus ? FLOATING_WORKING_CONTROL_COVERAGE : 0)
                 }
                 contentMaxWidth={contentMaxWidth}

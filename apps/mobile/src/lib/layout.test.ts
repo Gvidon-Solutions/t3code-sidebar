@@ -3,8 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   alignListPaneToHinge,
   deriveLayout,
-  deriveThreadFeedInitialContentInset,
   deriveThreadArrangementSizing,
+  deriveThreadFeedEndCoverage,
   deriveThreadWorkLogSizing,
   deriveWorkspacePaneLayout,
   isPrimarySidebarPinned,
@@ -49,16 +49,35 @@ describe("thread work-log text sizing", () => {
   });
 });
 
-describe("deriveThreadFeedInitialContentInset", () => {
-  // regression: #5585 land the first thread open above the composer on Android
-  it("does not double native iOS insets", () => {
+describe("deriveThreadFeedEndCoverage", () => {
+  it("includes the Android navigation-bar inset the composer sits above", () => {
     expect(
-      deriveThreadFeedInitialContentInset({
-        platform: "ios",
-        usesNativeAutomaticInsets: true,
-        bottomContentInset: 174,
+      deriveThreadFeedEndCoverage({
+        platform: "android",
+        composerHeight: 144,
+        bottomControlInset: 48,
       }),
-    ).toBeUndefined();
+    ).toBe(192);
+  });
+
+  it("lets UIKit's safe-area inset stand for the iOS composer coverage", () => {
+    expect(
+      deriveThreadFeedEndCoverage({
+        platform: "ios",
+        composerHeight: 144,
+        bottomControlInset: 34,
+      }),
+    ).toBe(144);
+  });
+
+  it("never subtracts coverage for a missing measurement", () => {
+    expect(
+      deriveThreadFeedEndCoverage({
+        platform: "android",
+        composerHeight: -12,
+        bottomControlInset: -4,
+      }),
+    ).toBe(0);
   });
 });
 

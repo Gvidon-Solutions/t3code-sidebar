@@ -86,16 +86,20 @@ export interface FileInspectorPaneLayout {
   readonly width: number | null;
 }
 
-export function deriveThreadFeedInitialContentInset(input: {
+/**
+ * The part of the screen bottom the feed must stay clear of. Android lays the composer above
+ * the navigation-bar inset, so measured composer height alone leaves the last lines under it.
+ * iOS adds the safe-area inset to the overlay itself, and `nativeInsetOvercount` accounts for it.
+ */
+export function deriveThreadFeedEndCoverage(input: {
   readonly platform: string;
-  readonly usesNativeAutomaticInsets: boolean;
-  readonly bottomContentInset: number;
-}): { readonly bottom: number } | undefined {
-  if (input.platform !== "android" || input.usesNativeAutomaticInsets) {
-    return undefined;
-  }
-
-  return { bottom: Math.max(0, input.bottomContentInset) };
+  readonly composerHeight: number;
+  readonly bottomControlInset: number;
+}): number {
+  return (
+    Math.max(0, input.composerHeight) +
+    (input.platform === "android" ? Math.max(0, input.bottomControlInset) : 0)
+  );
 }
 
 export type WorkspaceAuxiliaryPaneRole = "supplementary" | "inspector";

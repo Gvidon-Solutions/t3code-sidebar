@@ -8,6 +8,7 @@ import {
   resolveThreadFeedSubmissionAnchor,
   resolveThreadWorkGroupInitialScroll,
   shouldFollowThreadWorkGroupAppend,
+  shouldHoldThreadFeedEnd,
 } from "./thread-feed-live-follow";
 
 describe("tool-group scroll restoration", () => {
@@ -308,5 +309,42 @@ describe("width reflow anchors", () => {
         layout,
       ),
     ).toBeNull();
+  });
+});
+
+describe("opening a thread end hold", () => {
+  const base = {
+    following: true,
+    userScrolling: false,
+    atEnd: false,
+    startedAt: 0,
+    lastActivityAt: 0,
+    now: 0,
+    quietMs: 350,
+    maxMs: 2_500,
+  };
+
+  it("keeps pinning while the measured end is short of the content", () => {
+    expect(shouldHoldThreadFeedEnd({ ...base, now: 2_000 })).toBe(true);
+  });
+
+  it("holds through the quiet window once the feed reports the end", () => {
+    expect(shouldHoldThreadFeedEnd({ ...base, atEnd: true, now: 200 })).toBe(true);
+  });
+
+  it("releases a settled end after the quiet window", () => {
+    expect(shouldHoldThreadFeedEnd({ ...base, atEnd: true, now: 400 })).toBe(false);
+  });
+
+  it("stops holding when the reader scrolls", () => {
+    expect(shouldHoldThreadFeedEnd({ ...base, userScrolling: true, now: 100 })).toBe(false);
+  });
+
+  it("stops holding when the feed no longer follows the end", () => {
+    expect(shouldHoldThreadFeedEnd({ ...base, following: false, now: 100 })).toBe(false);
+  });
+
+  it("gives up at the safety cap even if the end was never reached", () => {
+    expect(shouldHoldThreadFeedEnd({ ...base, now: 2_501 })).toBe(false);
   });
 });

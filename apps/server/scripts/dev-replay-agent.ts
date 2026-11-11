@@ -50,6 +50,11 @@ export const SCENARIOS = [
     file: `${FIXTURES}/todo_list/registry_transcript.ndjson`,
   },
   {
+    id: "long-opencode",
+    name: "Long OpenCode stream",
+    file: "./dev-replay/long-opencode_transcript.ndjson",
+  },
+  {
     id: "approval",
     name: "Write approval",
     file: `${FIXTURES}/tool_call_read_only_on_request/registry_transcript.ndjson`,

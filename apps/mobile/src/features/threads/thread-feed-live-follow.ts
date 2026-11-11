@@ -92,6 +92,27 @@ export function resolveThreadFeedLiveFollow(
   }
 }
 
+/**
+ * An open starts before rows have measured, so the first scroll lands on an estimated end.
+ * Keep pinning the end through the measurements and the snapshot swap until the feed is quiet.
+ */
+export function shouldHoldThreadFeedEnd(input: {
+  readonly following: boolean;
+  readonly userScrolling: boolean;
+  readonly atEnd: boolean;
+  readonly startedAt: number;
+  readonly lastActivityAt: number;
+  readonly now: number;
+  readonly quietMs: number;
+  readonly maxMs: number;
+}): boolean {
+  if (!input.following || input.userScrolling) return false;
+  if (input.now - input.startedAt > input.maxMs) return false;
+  // Never release while the end is short of the measured content; the last measurement is
+  // what moves it, and the quiet window only decides when a settled end may stop the hold.
+  return !input.atEnd || input.now - input.lastActivityAt <= input.quietMs;
+}
+
 /** The LegendList state a width reflow reads before rows re-measure and after they settle. */
 export interface ThreadFeedReflowListState {
   readonly data: ReadonlyArray<{ readonly id: string }>;
