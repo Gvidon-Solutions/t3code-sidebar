@@ -2748,7 +2748,8 @@ export const ThreadFeed = memo(function ThreadFeed({
     if (hold?.timer != null) clearTimeout(hold.timer);
     openEndHoldRef.current = null;
   };
-  const holdOpenEnd = (activity: boolean) => {
+  const finishOpenEndHoldOnUnmount = useEffectEvent(finishOpenEndHold);
+  const holdOpenEnd = (activity: boolean, now: number) => {
     const hold = openEndHoldRef.current;
     if (hold === null) return;
     // A jump to a message owns the offset; the end hold must not pull the reader back.
@@ -2756,7 +2757,6 @@ export const ThreadFeed = memo(function ThreadFeed({
       finishOpenEndHold();
       return;
     }
-    const now = Date.now();
     if (activity) hold.lastActivityAt = now;
     const shouldHold = shouldHoldThreadFeedEnd({
       following: endFollowEnabledRef.current,
@@ -2775,9 +2775,9 @@ export const ThreadFeed = memo(function ThreadFeed({
     // Pin the true end again as rows finish measuring and the live snapshot replaces the cache.
     void listRef.current?.scrollToEnd({ animated: false });
     if (hold.timer !== null) clearTimeout(hold.timer);
-    hold.timer = setTimeout(() => holdOpenEnd(false), FEED_OPEN_END_QUIET_MS);
+    hold.timer = setTimeout(() => holdOpenEnd(false, Date.now()), FEED_OPEN_END_QUIET_MS);
   };
-  const holdOpenEndOnFeedChange = useEffectEvent(() => holdOpenEnd(true));
+  const holdOpenEndOnFeedChange = useEffectEvent((now: number) => holdOpenEnd(true, now));
   const startOpenEndHold = () => {
     if (
       !endFollowEnabledRef.current ||
@@ -2789,7 +2789,7 @@ export const ThreadFeed = memo(function ThreadFeed({
     finishOpenEndHold();
     const now = Date.now();
     openEndHoldRef.current = { startedAt: now, lastActivityAt: now, timer: null };
-    holdOpenEnd(false);
+    holdOpenEnd(false, now);
   };
   const [interactionState, setInteractionState] = useState<{
     readonly copiedRowId: string | null;
@@ -3558,7 +3558,7 @@ export const ThreadFeed = memo(function ThreadFeed({
     () => () => {
       if (userScrollSettleTimerRef.current !== null) clearTimeout(userScrollSettleTimerRef.current);
       if (reflowSettleTimerRef.current !== null) clearTimeout(reflowSettleTimerRef.current);
-      finishOpenEndHold();
+      finishOpenEndHoldOnUnmount();
       if (copyFeedbackTimeoutRef.current) clearTimeout(copyFeedbackTimeoutRef.current);
       if (disclosureMotionTimer.current !== null) clearTimeout(disclosureMotionTimer.current);
       if (disclosureSettleFrameRef.current !== null) {
@@ -3661,15 +3661,18 @@ export const ThreadFeed = memo(function ThreadFeed({
   };
 
   const handleItemSizeChanged = () => {
-    holdOpenEnd(true);
+    // oxlint-disable-next-line react/purity -- reads the clock in the native size-change callback, never during render
+    holdOpenEnd(true, Date.now());
     if (disclosureAnchorKeyRef.current !== null) {
       settleDisclosureAfterLayout();
     }
   };
 
   // The cached feed is replaced by the live snapshot after the list loads; keep the open pinned.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-pins the native list end after the feed or live snapshot replaces rows
   useLayoutEffect(() => {
-    holdOpenEndOnFeedChange();
+    holdOpenEndOnFeedChange(Date.now());
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the feed identity is the trigger; the hold reads only refs
   }, [props.feed]);
 
   const shouldRestoreVisibleContentPosition = (entry: ThreadFeedRow) => {

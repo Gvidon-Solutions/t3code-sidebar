@@ -102,6 +102,24 @@ export function deriveThreadFeedEndCoverage(input: {
   );
 }
 
+/**
+ * The composer's end padding beyond its measured overlay height. Android lays the composer above
+ * the navigation-bar inset, and LegendList's keyboard integration subtracts the composer's bottom
+ * gutter from the keyboard inset, so both must come back while the keyboard is open.
+ */
+export function deriveThreadFeedComposerEndExtra(input: {
+  readonly platform: string;
+  readonly bottomControlInset: number;
+  readonly keyboardVisible: boolean;
+  readonly keyboardOffset: number;
+}): number {
+  if (input.platform !== "android") return 0;
+  return (
+    Math.max(0, input.bottomControlInset) +
+    (input.keyboardVisible ? Math.max(0, input.keyboardOffset) : 0)
+  );
+}
+
 export type WorkspaceAuxiliaryPaneRole = "supplementary" | "inspector";
 
 export function deriveLayout(input: {

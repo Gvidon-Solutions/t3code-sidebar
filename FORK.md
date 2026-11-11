@@ -109,6 +109,26 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-11 — Android thread open keeps the true feed end
+
+- **What.** Opening a thread on Android no longer lands on an estimated end and then jumps as rows
+  measure. The list stays pinned to the measured end through the live snapshot swap and the first
+  re-measures, and releases as soon as the reader drags. A running OpenCode-shaped turn now opens at
+  `long stream complete`, and the scroll-to-bottom control lands with the message actions above the
+  composer. The composer's Android end padding now includes the navigation-bar inset and the
+  keyboard gutter, so a three-line draft or an open keyboard keeps the last line and its actions
+  visible. A deterministic `long-opencode` replay scenario covers the running shape.
+- **Where.** `apps/mobile/src/features/threads/{ThreadFeed,ThreadDetailScreen}.tsx`,
+  `apps/mobile/src/features/threads/thread-feed-live-follow.ts` (`shouldHoldThreadFeedEnd`),
+  `apps/mobile/src/lib/layout.ts` (`deriveThreadFeedEndCoverage`,
+  `deriveThreadFeedComposerEndExtra`), `apps/server/scripts/dev-replay-agent.ts` and
+  `apps/server/scripts/dev-replay/long-opencode_transcript.ndjson`.
+- **How.** The feed holds `scrollToEnd` after `onLoad` and on every feed or row-size change until
+  the end is reached and quiet, cancels the hold on drag or a message jump, and caps it at ten
+  seconds. Android's `contentInsetEndAdjustment` carries the composer height plus the bottom
+  control and keyboard gutters instead of a static `contentInset`, which LegendList's keyboard
+  integration subtracts.
+
 ### 2026-11-10 — Upstream v0.1.8 merge audit fixes (migrations, preflight, auth hardening)
 
 - **What.** The merge audit's findings are fixed. The service preflight and `databaseMigrationHead`

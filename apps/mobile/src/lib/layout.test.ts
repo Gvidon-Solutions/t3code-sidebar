@@ -4,6 +4,7 @@ import {
   alignListPaneToHinge,
   deriveLayout,
   deriveThreadArrangementSizing,
+  deriveThreadFeedComposerEndExtra,
   deriveThreadFeedEndCoverage,
   deriveThreadWorkLogSizing,
   deriveWorkspacePaneLayout,
@@ -76,6 +77,41 @@ describe("deriveThreadFeedEndCoverage", () => {
         platform: "android",
         composerHeight: -12,
         bottomControlInset: -4,
+      }),
+    ).toBe(0);
+  });
+});
+
+describe("deriveThreadFeedComposerEndExtra", () => {
+  it("adds the navigation-bar inset under the Android composer", () => {
+    expect(
+      deriveThreadFeedComposerEndExtra({
+        platform: "android",
+        bottomControlInset: 48,
+        keyboardVisible: false,
+        keyboardOffset: 24,
+      }),
+    ).toBe(48);
+  });
+
+  it("returns the composer's keyboard gutter while the keyboard is open", () => {
+    expect(
+      deriveThreadFeedComposerEndExtra({
+        platform: "android",
+        bottomControlInset: 48,
+        keyboardVisible: true,
+        keyboardOffset: 24,
+      }),
+    ).toBe(72);
+  });
+
+  it("leaves iOS to the native safe-area inset", () => {
+    expect(
+      deriveThreadFeedComposerEndExtra({
+        platform: "ios",
+        bottomControlInset: 34,
+        keyboardVisible: true,
+        keyboardOffset: 24,
       }),
     ).toBe(0);
   });

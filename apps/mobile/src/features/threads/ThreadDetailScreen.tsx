@@ -138,6 +138,7 @@ import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderE
 import {
   ANDROID_READING_MAX_WIDTH,
   CHAT_CONTENT_MAX_WIDTH,
+  deriveThreadFeedComposerEndExtra,
   deriveThreadFeedEndCoverage,
   type LayoutVariant,
 } from "../../lib/layout";
@@ -1004,16 +1005,16 @@ function ThreadDetailBody(
       ? deviceType !== "duo-unfolded" || (composerOwnsKeyboard && !sidebarSearchActive)
       : !keyboardStateSuspect;
   const estimatedOverlayHeight = composerOverlapHeight;
-  const composerFeedBottomExtra =
-    Platform.OS === "android" ? Math.max(0, controlInsets.bottom) : 0;
-  // The keyboard integration subtracts the composer's bottom gutter from the keyboard padding,
-  // but the composer still stacks above the keyboard, so its end would sit under the gutters' line.
-  const keyboardComposerClearance =
-    Platform.OS === "android" && isKeyboardVisible ? composerKeyboardOffset : 0;
   const composerFeedCoverage = deriveThreadFeedEndCoverage({
     platform: Platform.OS,
     composerHeight: estimatedOverlayHeight,
     bottomControlInset: controlInsets.bottom,
+  });
+  const composerFeedExtra = deriveThreadFeedComposerEndExtra({
+    platform: Platform.OS,
+    bottomControlInset: controlInsets.bottom,
+    keyboardVisible: isKeyboardVisible,
+    keyboardOffset: composerKeyboardOffset,
   });
   // UIKit adds safe-area bottom to overlay insets; subtract here and include it in ThreadFeed scroll math.
   const nativeInsetOvercount =
@@ -1146,17 +1147,14 @@ function ThreadDetailBody(
   const userInputCoverageApplies = Platform.OS === "ios" && activeUserInputRequestId !== null;
   const questionStatusSpace = useAnimatedStyle(() => ({ height: floatingControlCoverage.value }));
   const combinedContentInsetEndAdjustment = useSharedValue(
-    Math.max(0, estimatedOverlayHeight - nativeInsetOvercount) +
-      composerFeedBottomExtra +
-      keyboardComposerClearance,
+    Math.max(0, estimatedOverlayHeight - nativeInsetOvercount) + composerFeedExtra,
   );
   useAnimatedReaction(
     () =>
       questionInFlow
         ? 0
         : contentInsetEndAdjustment.value +
-          composerFeedBottomExtra +
-          keyboardComposerClearance +
+          composerFeedExtra +
           floatingControlCoverage.value +
           (userInputCoverageApplies
             ? userInputInsetProgress.value * userInputCardCoverage.value
@@ -1164,7 +1162,7 @@ function ThreadDetailBody(
     (value) => {
       combinedContentInsetEndAdjustment.set(value);
     },
-    [questionInFlow, userInputCoverageApplies, composerFeedBottomExtra, keyboardComposerClearance],
+    [questionInFlow, userInputCoverageApplies, composerFeedExtra],
   );
   const composerPopoverLift = useDerivedValue(() =>
     withTiming(
