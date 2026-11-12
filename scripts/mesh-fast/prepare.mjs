@@ -1,6 +1,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
+import * as NodeURL from "node:url";
 import * as NodeCrypto from "node:crypto";
 import { run } from "./client.mjs";
 import { posixLockBinary } from "./daemons.mjs";
@@ -82,7 +83,7 @@ async function prepareLocked() {
   // the dependency. Install it beside the other tools instead of relying on a global cache.
   const browsers = NodePath.join(root, "browsers");
   const playwrightRoot = NodePath.dirname(
-    NodePath.fromFileURL(import.meta.resolve("playwright-core")),
+    NodeURL.fileURLToPath(import.meta.resolve("playwright-core")),
   );
   const playwrightCli = NodePath.join(playwrightRoot, "cli.js");
   const playwrightVersion = JSON.parse(
