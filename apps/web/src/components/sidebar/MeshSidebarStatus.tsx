@@ -14,7 +14,6 @@ import { usePrimarySettings } from "../../hooks/useSettings";
 import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-/** The icon itself, split out so a screenshot harness can render it without the hooks. */
 function MeshSidebarStatusButton({
   text,
   problem,
@@ -29,20 +28,27 @@ function MeshSidebarStatusButton({
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuButton aria-label={text} onClick={onClick} size="icon">
-              <NetworkIcon className={problem ? "text-warning!" : undefined} />
+            <SidebarMenuButton
+              aria-label={text}
+              className="group/menu-button"
+              onClick={onClick}
+              size="icon"
+            >
+              <span className="relative inline-flex size-4 shrink-0 items-center justify-center text-(--sidebar-icon-color) transition-colors group-hover/menu-button:text-sidebar-foreground">
+                <NetworkIcon className={problem ? "size-4 text-warning!" : "size-4"} />
+                {problem ? (
+                  <span
+                    aria-hidden
+                    data-mesh-status-problem
+                    className="pointer-events-none absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-warning ring-2 ring-sidebar"
+                  />
+                ) : null}
+              </span>
             </SidebarMenuButton>
           }
         />
         <TooltipPopup side="top">{text}</TooltipPopup>
       </Tooltip>
-      {problem ? (
-        <span
-          aria-hidden
-          data-mesh-status-problem
-          className="pointer-events-none absolute -top-1 -right-1 size-1.5 rounded-full bg-warning ring-2 ring-sidebar"
-        />
-      ) : null}
     </SidebarMenuItem>
   );
 }
