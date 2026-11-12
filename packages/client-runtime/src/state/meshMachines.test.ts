@@ -202,7 +202,7 @@ describe("deriveMeshFooterStatus", () => {
 
   it("says how many machines sync when none reports an error", () => {
     const status = deriveMeshFooterStatus({ enabled: true, machines, now: 0 });
-    expect(status).toEqual({ kind: "synced", count: 2 });
+    expect(status).toEqual({ kind: "synced", count: 2, severity: "ok" });
     expect(meshFooterText(status)).toBe("Mesh · 2 machines · synced");
   });
 
@@ -232,6 +232,7 @@ describe("deriveMeshFooterStatus", () => {
       label: "Boreal",
       tag: "BO",
       minutes: 5,
+      severity: "error",
     });
     expect(meshFooterText(status)).toBe("Boreal is offline · 5 min");
   });
@@ -408,7 +409,7 @@ it("excludes unlinked seven-day-old machines and forgets only their layout facts
       ],
       now: Date.parse("2026-11-05T00:00:00Z"),
     }),
-  ).toEqual({ kind: "synced", count: 1 });
+  ).toEqual({ kind: "synced", count: 1, severity: "ok" });
 });
 
 it("does not resurrect a forgotten machine through replica source facts", () => {
