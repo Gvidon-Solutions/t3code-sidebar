@@ -11,7 +11,7 @@ const LINE_CLAMP = {
 } as const;
 
 /** What the conversation is doing when nobody's words are on screen. */
-export function useVoiceStatus(): string {
+function useVoiceStatus(): string {
   const state = useVoiceModeState();
   const speaking = useVoiceSpeaking(state.phase === "active");
   if (state.phase === "connecting") return "Connecting…";

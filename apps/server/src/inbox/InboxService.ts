@@ -61,7 +61,7 @@ import * as ServerSettings from "../serverSettings.ts";
 
 /** An issue waiting for the owner rises to the top again after this long without an answer. */
 /** @internal */
-export const INBOX_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const INBOX_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** Closed issues a subscription carries unless the client asks for more. */
 const DEFAULT_CLOSED_LIMIT = 30;
 
@@ -213,7 +213,7 @@ const entryFromRow = (row: EntryRow): Effect.Effect<InboxEntry, InboxError> => {
  * additive and idempotent (check `PRAGMA table_info` before `ALTER TABLE`).
  */
 /** @internal */
-export const ensureSchema = Effect.gen(function* () {
+const ensureSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`
     CREATE TABLE IF NOT EXISTS fork_inbox_issues (

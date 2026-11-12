@@ -1439,15 +1439,15 @@ export const layerDeviceToolkit = Layer.mergeAll(
 
 // Fork: agent inbox.
 /** @internal */
-export const layerInboxToolkit = toolkitRegistration(InboxToolkit, InboxHandlers.layer);
+const layerInboxToolkit = toolkitRegistration(InboxToolkit, InboxHandlers.layer);
 
 // Fork: show things on the owner's screen.
 /** @internal */
-export const layerUiToolkit = toolkitRegistration(UiToolkit, UiHandlers.layer);
+const layerUiToolkit = toolkitRegistration(UiToolkit, UiHandlers.layer);
 
 // Fork: read and list files on another machine over a peer link.
 /** @internal */
-export const layerFilesToolkit = toolkitRegistration(FilesToolkit, FilesHandlers.layer);
+const layerFilesToolkit = toolkitRegistration(FilesToolkit, FilesHandlers.layer);
 
 /**
  * `McpServer` for in-process calls, which provide `McpInvocationContext`

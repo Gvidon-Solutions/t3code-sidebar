@@ -1,5 +1,5 @@
 // Commands that dispatch from the executable bootstrap without loading the full CLI module graph.
-export const fastPathCommands = [
+const fastPathCommands = [
   "__run-worker",
   "__replica-command",
   "run",

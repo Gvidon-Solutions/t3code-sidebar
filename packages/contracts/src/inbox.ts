@@ -203,38 +203,38 @@ export const INBOX_WS_METHODS = {
 const InboxRpcError = Schema.Union([InboxError, EnvironmentAuthorizationError]);
 
 /** Open issues and the newest closed ones: a snapshot on subscribe, then one after every change. */
-export const WsInboxSubscribeRpc = Rpc.make(INBOX_WS_METHODS.subscribe, {
+const WsInboxSubscribeRpc = Rpc.make(INBOX_WS_METHODS.subscribe, {
   payload: InboxSubscribeInput,
   success: InboxSnapshot,
   error: InboxRpcError,
   stream: true,
 });
 /** One issue with its whole history, re-sent after every change to it. */
-export const WsInboxSubscribeIssueRpc = Rpc.make(INBOX_WS_METHODS.subscribeIssue, {
+const WsInboxSubscribeIssueRpc = Rpc.make(INBOX_WS_METHODS.subscribeIssue, {
   payload: InboxIssueInput,
   success: InboxIssueDetail,
   error: InboxRpcError,
   stream: true,
 });
 /** The owner's comment; it is also delivered to the responsible thread. */
-export const WsInboxCommentRpc = Rpc.make(INBOX_WS_METHODS.comment, {
+const WsInboxCommentRpc = Rpc.make(INBOX_WS_METHODS.comment, {
   payload: InboxOwnerCommentInput,
   success: InboxIssueDetail,
   error: InboxRpcError,
 });
-export const WsInboxMarkSeenRpc = Rpc.make(INBOX_WS_METHODS.markSeen, {
+const WsInboxMarkSeenRpc = Rpc.make(INBOX_WS_METHODS.markSeen, {
   payload: InboxMarkSeenInput,
   success: InboxIssueResult,
   error: InboxRpcError,
 });
 /** "Close as not relevant": the owner's decision, told to the responsible agent. */
-export const WsInboxDismissRpc = Rpc.make(INBOX_WS_METHODS.dismiss, {
+const WsInboxDismissRpc = Rpc.make(INBOX_WS_METHODS.dismiss, {
   payload: InboxDismissInput,
   success: InboxIssueResult,
   error: InboxRpcError,
 });
 /** Undoes the owner's dismissal. */
-export const WsInboxUndismissRpc = Rpc.make(INBOX_WS_METHODS.undismiss, {
+const WsInboxUndismissRpc = Rpc.make(INBOX_WS_METHODS.undismiss, {
   payload: InboxIssueInput,
   success: InboxIssueResult,
   error: InboxRpcError,
@@ -345,7 +345,7 @@ export const InboxResolveInput = Schema.Struct({
 export type InboxResolveInput = typeof InboxResolveInput.Type;
 
 /** Message ids of inbox deliveries; clients use them to label the message. */
-export const INBOX_MESSAGE_ID_PREFIX = "inbox:";
+const INBOX_MESSAGE_ID_PREFIX = "inbox:";
 
 export const inboxDeliveryMessageId = (
   issueId: InboxIssueId,

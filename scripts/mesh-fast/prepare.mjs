@@ -1,6 +1,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
+import * as NodeURL from "node:url";
 import * as NodeCrypto from "node:crypto";
 import { run } from "./client.mjs";
 import { posixLockBinary } from "./daemons.mjs";
@@ -77,6 +78,31 @@ async function prepareLocked() {
     if (error.code !== "ENOENT") throw error;
     await run("tar", ["-xzf", archive, "-C", root]);
     await NodeFSP.writeFile(ready, "0.18.1\n");
+  }
+  // The runner launches web tests through playwright-core, whose browser revision changes with
+  // the dependency. Install it beside the other tools instead of relying on a global cache.
+  const browsers = NodePath.join(root, "browsers");
+  const playwrightRoot = NodePath.dirname(
+    NodeURL.fileURLToPath(import.meta.resolve("playwright-core")),
+  );
+  const playwrightCli = NodePath.join(playwrightRoot, "cli.js");
+  const playwrightVersion = JSON.parse(
+    await NodeFSP.readFile(NodePath.join(playwrightRoot, "package.json"), "utf8"),
+  ).version;
+  const playwrightReady = NodePath.join(browsers, `.mesh-fast-playwright-${playwrightVersion}`);
+  let browsersReady = false;
+  try {
+    await NodeFSP.stat(playwrightReady);
+    browsersReady = true;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  if (!browsersReady) {
+    await NodeFSP.mkdir(browsers, { recursive: true });
+    await run(process.execPath, [playwrightCli, "install", "chromium"], {
+      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsers },
+    });
+    await NodeFSP.writeFile(playwrightReady, `${playwrightVersion}\n`);
   }
   await run("docker", [
     "build",

@@ -11,6 +11,10 @@ const TEST_EXCLUDE = [
   "**/dist/**",
   "**/dist-electron/**",
   "**/.{idea,git,cache,output,temp}/**",
+  // These are node:test files. CI and scripts/check-changed run them with `node --test`;
+  // Vitest reports a node:test file as an empty suite, so a path filter must not collect them.
+  ".github/scripts/**/*.test.cjs",
+  "agent-kit/**/*.test.mjs",
 ];
 
 // Directories whose tests belong to a package's own test config. desktop also

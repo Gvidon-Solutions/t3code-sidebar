@@ -4,7 +4,7 @@ import type { VoiceCommandAction } from "@t3tools/contracts";
 import type { VoiceModeController, VoiceSessionTarget } from "./controller.ts";
 
 /** Speaker loudness (WebRTC `audioLevel`, 0..1) above which the assistant counts as speaking. */
-export const VOICE_SPEAKING_LEVEL = 0.02;
+const VOICE_SPEAKING_LEVEL = 0.02;
 const QUIET_MS = 700;
 const MAX_QUIET_WAIT_MS = 6_000;
 

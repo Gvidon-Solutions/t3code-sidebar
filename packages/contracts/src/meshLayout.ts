@@ -151,18 +151,18 @@ const LayoutError = Schema.Union([MeshLayoutError, EnvironmentAuthorizationError
 const ReplicaRpcError = Schema.Union([ReplicaError, EnvironmentAuthorizationError]);
 const ConfigRpcError = Schema.Union([MeshConfigError, EnvironmentAuthorizationError]);
 
-export const WsMeshLayoutGetRpc = Rpc.make(MESH_WS_METHODS.layoutGet, {
+const WsMeshLayoutGetRpc = Rpc.make(MESH_WS_METHODS.layoutGet, {
   payload: Schema.Struct({}),
   success: MeshLayoutSnapshot,
   error: LayoutError,
 });
-export const WsMeshLayoutApplyRpc = Rpc.make(MESH_WS_METHODS.layoutApply, {
+const WsMeshLayoutApplyRpc = Rpc.make(MESH_WS_METHODS.layoutApply, {
   payload: MeshLayoutApplyInput,
   success: MeshLayoutSnapshot,
   error: LayoutError,
 });
 /** The snapshot now, then one after every merged change. */
-export const WsMeshLayoutSubscribeRpc = Rpc.make(MESH_WS_METHODS.layoutSubscribe, {
+const WsMeshLayoutSubscribeRpc = Rpc.make(MESH_WS_METHODS.layoutSubscribe, {
   payload: Schema.Struct({}),
   success: MeshLayoutSnapshot,
   error: LayoutError,

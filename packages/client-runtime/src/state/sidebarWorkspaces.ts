@@ -114,7 +114,7 @@ export interface WorkspaceProjectIdentity {
 export const SCRATCH_WORKSPACE_PROJECT_KEY = "no-project";
 
 /** The key a project's assignment and placements are stored under. */
-export function workspaceConfigKeyOf(project: WorkspaceProjectIdentity): string {
+function workspaceConfigKeyOf(project: WorkspaceProjectIdentity): string {
   return project.isScratch ? SCRATCH_WORKSPACE_PROJECT_KEY : project.projectKey;
 }
 

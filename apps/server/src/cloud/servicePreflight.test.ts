@@ -92,9 +92,9 @@ it.layer(NodeServices.layer)("service preflight database", (it) => {
       const db = new NodeSqlite.DatabaseSync(databasePath);
       db.exec("CREATE TABLE effect_sql_migrations (migration_id INTEGER PRIMARY KEY, name TEXT)");
       const insert = db.prepare("INSERT INTO effect_sql_migrations VALUES (?, ?)");
-      for (const [id, name] of migrationManifest.filter(
-        ([id]) => id < Math.max(...migrationManifest.map(([entryId]) => entryId)),
-      )) {
+      // Upstream through 79, then the legacy fork rows. The highest upstream row used to be 80;
+      // it is 81 now, so stop before the legacy range rather than below the head.
+      for (const [id, name] of migrationManifest.filter(([id]) => id < 80)) {
         insert.run(id, name);
       }
       // The live shape: the pre-split fork wrote 80-84 into the upstream ledger.

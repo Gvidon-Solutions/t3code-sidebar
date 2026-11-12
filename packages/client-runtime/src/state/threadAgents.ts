@@ -33,7 +33,7 @@ const WORKING_STATUSES: ReadonlySet<string> = new Set([
   "waiting",
 ]);
 
-export function agentRunState(thread: AgentThreadInput): AgentRunState {
+function agentRunState(thread: AgentThreadInput): AgentRunState {
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return "attention";
   const status = thread.runtime?.status ?? thread.source?.status;
   if (status !== undefined && WORKING_STATUSES.has(status)) return "working";

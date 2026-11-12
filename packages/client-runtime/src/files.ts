@@ -2,7 +2,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { machineDisplayOf } from "./state/machineDisplay.ts";
 
 /** T3 Mesh (fork): routing a file request to the machine that holds it. */
-export const T3_FILE_URL_PREFIX = "t3-file://";
+const T3_FILE_URL_PREFIX = "t3-file://";
 
 /** Uses the sidebar's default tag rule in file machine pickers. */
 export function machineTag(label: string): string {

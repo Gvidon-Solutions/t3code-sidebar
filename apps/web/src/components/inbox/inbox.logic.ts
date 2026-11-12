@@ -40,7 +40,7 @@ export interface InboxState {
   readonly closedTotal: number;
 }
 
-export const EMPTY_INBOX_STATE: InboxState = {
+const EMPTY_INBOX_STATE: InboxState = {
   environments: [],
   items: [],
   open: [],
@@ -66,7 +66,7 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /** Field-by-field equality; every snapshot decodes fresh objects for unchanged issues. */
-export function sameInboxIssue(a: InboxIssue, b: InboxIssue): boolean {
+function sameInboxIssue(a: InboxIssue, b: InboxIssue): boolean {
   if (a === b) return true;
   const keys = Object.keys(a) as Array<keyof InboxIssue>;
   return keys.length === Object.keys(b).length && keys.every((key) => sameValue(a[key], b[key]));

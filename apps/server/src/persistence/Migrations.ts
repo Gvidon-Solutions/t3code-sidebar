@@ -196,7 +196,7 @@ export const BUILD_FORK_MIGRATION_HEAD = Math.max(...forkMigrationEntries.map(([
 // Legacy upstream-ledger ids a pre-split fork build wrote, mapped to their fork ids. A null id
 // means the old record must not mark fork work done: bc0a8f1f26 recorded PeerReceiptRetention at
 // 82 before PeerIdentityBindings at 1002 existed, so its row is dropped and 1002-1004 run.
-export const LEGACY_FORK_MIGRATION_IDS: ReadonlyArray<{
+const LEGACY_FORK_MIGRATION_IDS: ReadonlyArray<{
   readonly legacyId: number;
   readonly legacyName: string;
   readonly id: number | null;
