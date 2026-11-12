@@ -12,6 +12,7 @@ import {
   partitionMeshMachines,
   forgetMachineFacts,
   deriveMeshFooterStatus,
+  meshStatusEnabled,
   fitMeshPrompt,
   MESH_PROMPT_MAX_LENGTH,
   meshFooterText,
@@ -882,5 +883,29 @@ describe("offline conversation", () => {
   it("marks project rows as last known while the machine is offline", () => {
     const rows = meshProjectRows(base, "boreal", [], { lastKnown: true });
     expect(rows.every((row) => row.sentence.includes("last known:"))).toBe(true);
+  });
+});
+
+describe("meshStatusEnabled", () => {
+  it("follows the primary server switches when there is a primary", () => {
+    const on = { meshEnabled: true, linkedEnvironmentsEnabled: true };
+    expect(meshStatusEnabled({ primarySettings: on, meshSourceConnected: false })).toBe(true);
+    expect(
+      meshStatusEnabled({
+        primarySettings: { ...on, linkedEnvironmentsEnabled: false },
+        meshSourceConnected: true,
+      }),
+    ).toBe(false);
+    expect(
+      meshStatusEnabled({
+        primarySettings: { ...on, meshEnabled: false },
+        meshSourceConnected: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("follows the connected mesh source when there is no primary server", () => {
+    expect(meshStatusEnabled({ primarySettings: null, meshSourceConnected: true })).toBe(true);
+    expect(meshStatusEnabled({ primarySettings: null, meshSourceConnected: false })).toBe(false);
   });
 });

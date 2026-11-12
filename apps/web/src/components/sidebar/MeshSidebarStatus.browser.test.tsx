@@ -9,17 +9,22 @@ import { MeshSidebarStatus } from "./MeshSidebarStatus";
 
 const state = vi.hoisted(() => ({
   enabled: true,
+  primary: true,
+  meshSource: "studio" as string | null,
   machines: [] as ReadonlyArray<MeshMachine>,
 }));
 
 vi.mock(import("../../hooks/useSettings"), () => ({
-  usePrimarySettings: (() => state.enabled) as never,
+  usePrimaryServerSettingsOrNull: (() =>
+    state.primary
+      ? { meshEnabled: state.enabled, linkedEnvironmentsEnabled: true }
+      : null) as never,
 }));
 vi.mock(import("../../hooks/useNowMinute"), () => ({
   useNowMinute: () => "2026-11-03T00:00:00Z",
 }));
 vi.mock(import("../../hooks/useMeshLayout"), () => ({
-  useMeshLayout: (() => ({ config: null })) as never,
+  useMeshLayout: (() => ({ config: null, source: state.meshSource })) as never,
 }));
 vi.mock(import("../../hooks/useMeshOverview"), () => ({
   useMeshOverview: (() => ({ machines: state.machines })) as never,
@@ -89,4 +94,23 @@ it("opens Mesh settings when clicked", async () => {
   await using screen = await render(<Harness />);
   await userEvent.click(screen.getByRole("button", { name: "Mesh · 1 machine · synced" }));
   await vi.waitFor(() => expect(screen.router?.state.location.pathname).toBe("/settings/mesh"));
+});
+
+it("shows the icon in a desktop app whose own server is not running", async () => {
+  state.primary = false;
+  state.meshSource = "studio";
+  state.machines = syncedMachines;
+  await using screen = await render(<Harness />);
+  await expect
+    .element(screen.getByRole("button", { name: "Mesh · 1 machine · synced" }))
+    .toBeVisible();
+  state.primary = true;
+});
+
+it("hides the icon when the primary server turned the mesh off", async () => {
+  state.enabled = false;
+  state.machines = syncedMachines;
+  await using screen = await render(<Harness />);
+  expect(screen.container.querySelector("button")).toBeNull();
+  state.enabled = true;
 });

@@ -5,12 +5,13 @@ import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
 import {
   deriveMeshFooterStatus,
   meshFooterText,
+  meshStatusEnabled,
 } from "@t3tools/client-runtime/state/mesh-machines";
 
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { useNowMinute } from "../../hooks/useNowMinute";
-import { usePrimarySettings } from "../../hooks/useSettings";
+import { usePrimaryServerSettingsOrNull } from "../../hooks/useSettings";
 import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -60,10 +61,12 @@ function MeshSidebarStatusButton({
 export function MeshSidebarStatus() {
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
-  const enabled = usePrimarySettings(
-    (settings) => settings.meshEnabled && settings.linkedEnvironmentsEnabled,
-  );
+  const primarySettings = usePrimaryServerSettingsOrNull();
   const mesh = useMeshLayout();
+  const enabled = meshStatusEnabled({
+    primarySettings,
+    meshSourceConnected: mesh.source !== null,
+  });
   const { machines } = useMeshOverview({ config: mesh.config });
   const now = minuteTickToEpochMs(useNowMinute());
   const status = deriveMeshFooterStatus({ enabled, machines, now });

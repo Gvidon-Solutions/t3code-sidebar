@@ -373,6 +373,21 @@ export type MeshFooterStatus =
       readonly severity: "error";
     };
 
+/**
+ * Whether the mesh status shows. The primary server's switches decide when there is one; a
+ * desktop app whose own server is not running has no primary, so a connected mesh source does.
+ */
+export function meshStatusEnabled(input: {
+  readonly primarySettings: {
+    readonly meshEnabled: boolean;
+    readonly linkedEnvironmentsEnabled: boolean;
+  } | null;
+  readonly meshSourceConnected: boolean;
+}): boolean {
+  if (input.primarySettings === null) return input.meshSourceConnected;
+  return input.primarySettings.meshEnabled && input.primarySettings.linkedEnvironmentsEnabled;
+}
+
 /** A minute by minute reading of the footer line; `hidden` when the mesh is off or unknown. */
 export function deriveMeshFooterStatus(input: {
   readonly enabled: boolean;

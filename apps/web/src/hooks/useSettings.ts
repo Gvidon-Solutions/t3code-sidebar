@@ -50,7 +50,11 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { toastManager } from "~/components/ui/toast";
 import { isHostedStaticApp } from "~/hostedPairing";
 import { environmentCatalog } from "~/connection/catalog";
-import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
+import {
+  primaryServerConfigAtom,
+  primaryServerSettingsAtom,
+  serverEnvironment,
+} from "~/state/server";
 import { useEnvironments, usePrimaryEnvironment } from "~/state/environments";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useTheme } from "./useTheme";
@@ -545,6 +549,11 @@ export function usePrimarySettings<T = UnifiedSettings>(
 ): T {
   const settings = useAtomValue(primaryServerSettingsAtom);
   return useMergedSettings(settings, selector);
+}
+
+/** Sidebar fork: the primary server's own settings, or null while there is no primary server. */
+export function usePrimaryServerSettingsOrNull(): ServerSettings | null {
+  return useAtomValue(primaryServerConfigAtom)?.settings ?? null;
 }
 
 export const PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE =
