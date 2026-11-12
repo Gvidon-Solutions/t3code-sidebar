@@ -2679,7 +2679,7 @@ describe("ClaudeAdapterV2 native fork", () => {
     ),
   );
 
-  // The SDK reports a transcript outside `dir`'s project folder as missing.
+  // The SDK finds the session by id across the Claude home, without a project `dir`.
   const forkMovedProjectSession = (sessionFoundWithoutDir: boolean) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -2707,9 +2707,7 @@ describe("ClaudeAdapterV2 native fork", () => {
                     new ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError({
                       method: "forkSession",
                       cause: new Error(
-                        input.options.dir === undefined
-                          ? "Session source-native-session not found in any project directory"
-                          : `Session source-native-session not found in project directory for ${input.options.dir}`,
+                        "Session source-native-session not found in any project directory",
                       ),
                     }),
                   );
@@ -2759,11 +2757,13 @@ describe("ClaudeAdapterV2 native fork", () => {
       ),
     );
 
-  it.effect("forks a session whose transcript stayed under the project's old directory", () =>
+  it.effect("forks by session id so a moved project finds its old transcript", () =>
     Effect.gen(function* () {
       const { forked, forkOptions } = yield* forkMovedProjectSession(true);
 
-      assert.deepEqual(forkOptions, [{ dir: "/workspace/moved" }, {}]);
+      // The SDK resolves the session by id within the Claude home, so no `dir` is passed even
+      // though the runtime cwd moved.
+      assert.deepEqual(forkOptions, [{}]);
       assert.isTrue(Exit.isSuccess(forked));
       if (Exit.isSuccess(forked)) {
         assert.equal(forked.value.nativeThreadRef?.nativeId, "forked-native-session");
@@ -2771,19 +2771,16 @@ describe("ClaudeAdapterV2 native fork", () => {
     }),
   );
 
-  it.effect("reports the project-directory miss when no project has the session", () =>
+  it.effect("reports the session miss when no project has it", () =>
     Effect.gen(function* () {
       const { forked, forkOptions } = yield* forkMovedProjectSession(false);
 
-      assert.deepEqual(forkOptions, [{ dir: "/workspace/moved" }, {}]);
+      assert.deepEqual(forkOptions, [{}]);
       assert.isTrue(Exit.isFailure(forked));
       const error = Exit.isFailure(forked) ? Cause.squash(forked.cause) : undefined;
       assert.instanceOf(error, ProviderAdapter.ProviderAdapterForkThreadError);
       assert.instanceOf(error.cause, ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError);
-      assert.include(
-        String(error.cause.cause),
-        "not found in project directory for /workspace/moved",
-      );
+      assert.include(String(error.cause.cause), "not found in any project directory");
     }),
   );
 });
