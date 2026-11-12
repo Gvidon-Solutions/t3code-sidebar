@@ -133,3 +133,52 @@ it("binds a bootstrapped identity to its configured name after provisional peer 
   expect(result.updates["mesh.machineBinding/provisional"]).toBeNull();
   expect(result.doc.machines).toEqual({ cloudbox: machine });
 });
+
+it("treats machine key order as a non-semantic no-op", () => {
+  const desired = parseConfig({
+    schema: 1,
+    machines: { studio: { title: "Studio" }, laptop: { title: "Laptop" } },
+  });
+  const document: MeshLayoutDocument = {
+    "mesh.machineBinding/studio": { v: "alpha", h },
+    "mesh.machineBinding/laptop": { v: "beta", h },
+    "mesh.machineClaim/alpha": { v: { name: "studio", machine: { title: "Studio" } }, h },
+    "mesh.machineClaim/beta": { v: { name: "laptop", machine: { title: "Laptop" } }, h },
+  };
+  const reordered: typeof desired = {
+    ...desired,
+    machines: { laptop: desired.machines.laptop!, studio: desired.machines.studio! },
+  };
+  expect(Object.keys(desired.machines)).toEqual(["studio", "laptop"]);
+  expect(Object.keys(reordered.machines)).toEqual(["laptop", "studio"]);
+  for (const doc of [desired, reordered]) {
+    const result = repairMachineIdentity(document, doc);
+    expect(result.changed).toBe(false);
+    expect(result.docChanged).toBe(false);
+    expect(result.updates).toEqual({});
+  }
+
+  const result = repairMachineIdentity(
+    {
+      ...document,
+      "mesh.machineClaim/gamma": { v: { name: "cloudbox", machine: { title: "Cloudbox" } }, h },
+    },
+    reordered,
+  );
+  expect(result.changed).toBe(true);
+  expect(result.docChanged).toBe(true);
+  expect(result.updates["mesh.machineBinding/cloudbox"]).toBe("gamma");
+});
+
+it("reports an updates-only identity repair without a document change", () => {
+  const document: MeshLayoutDocument = {
+    "mesh.machineBinding/studio": { v: "alpha", h },
+    "machine/alpha": { v: { title: "Studio" }, h },
+  };
+  const result = repairMachineIdentity(document, config);
+  expect(result.changed).toBe(true);
+  expect(result.docChanged).toBe(false);
+  expect(result.updates).toEqual({
+    "mesh.machineClaim/alpha": { name: "studio", machine: { title: "Studio" } },
+  });
+});

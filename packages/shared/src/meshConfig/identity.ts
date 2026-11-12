@@ -1,4 +1,4 @@
-import { keys, decodeLayoutKey } from "../meshLayout/document.ts";
+import { canonical, keys, decodeLayoutKey } from "../meshLayout/document.ts";
 import { compare } from "../meshLayout/hlc.ts";
 import type { MeshConfigDocument } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "../meshLayout/document.ts";
@@ -107,11 +107,12 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
     if (bindings[name] !== desired[name])
       updates[keys.machineBinding(name)] = desired[name] ?? null;
   const next = { ...doc, machines };
+  const docChanged = canonical(next as unknown as Json) !== canonical(doc as unknown as Json);
   return {
-    docChanged: JSON.stringify(next) !== JSON.stringify(doc),
+    docChanged,
     doc: next,
     updates,
-    changed: Object.keys(updates).length > 0 || JSON.stringify(next) !== JSON.stringify(doc),
+    changed: Object.keys(updates).length > 0 || docChanged,
   };
 }
 
