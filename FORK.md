@@ -136,8 +136,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `inspector-host`, `useSidebarToggle`, `WorkspaceThreadSidebar`, `workspace-list-insets`,
   `ComposerModelControl`, `useBarInset`) stay deleted with the fork's replacements. Fork tests
   that mock the layout expose `useAdaptiveWorkspaceLayout`, upstream's new `Sidebar.drag` test
-  runs against the thread-list sidebar, upstream's new files use `/home/dev` instead of
-  `/home/user` and a neutral `dev` detail key, and the new `mobile-dev-client.yml` is SHA-pinned
+  runs against the thread-list sidebar, upstream's new files use neutral `/home/dev` homes and
+  a neutral `dev` detail key, and the new `mobile-dev-client.yml` is SHA-pinned
   and gated on the fork's repository.
 - **Where.** `apps/desktop/src/ipc/{DesktopIpc.ts,rendererTrust.ts,DesktopIpc.test.ts}`,
   `apps/desktop/src/main.ts`, `apps/desktop/src/ipc/methods/*.test.ts`,
