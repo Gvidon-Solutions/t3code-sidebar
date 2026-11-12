@@ -29,6 +29,21 @@ it("fails on a first-machine rollback instead of waiting for the second machine"
   expect(JSON.stringify(decision)).toContain("activeVersion=0.1.5");
 });
 
+it("fails on a first-machine rollback even before the second state exists", () => {
+  expect(
+    rolloutDecision(
+      [
+        first({
+          activeVersion: "0.1.5",
+          update: { status: "rolled-back", reason: "replica health failed" },
+        }),
+        { name: "laptop", role: "second" },
+      ],
+      expected,
+    ),
+  ).toMatchObject({ status: "failed", node: "cloudbox", role: "first" });
+});
+
 it("does not accept a second-machine rollback while the first machine has not committed", () => {
   expect(
     rolloutDecision(

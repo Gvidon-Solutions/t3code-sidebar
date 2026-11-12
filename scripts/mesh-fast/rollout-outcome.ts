@@ -79,7 +79,7 @@ export function rolloutDecision(
         `could not read its service state (${observation.error})`,
       );
 
-  if (first.state === undefined || second.state === undefined) return { status: "pending" };
+  if (first.state === undefined) return { status: "pending" };
   if (terminalFailure(first.state))
     return failure(
       first,
@@ -87,6 +87,7 @@ export function rolloutDecision(
       `rolled back before the second machine was updated with ${first.state.update?.reason ? `reason ${first.state.update.reason}` : "no recorded reason"}`,
     );
   if (first.state.activeVersion !== expected.targetVersion) return { status: "pending" };
+  if (second.state === undefined) return { status: "pending" };
 
   if (terminalFailure(second.state)) {
     if (second.state.activeVersion !== expected.secondVersion)
