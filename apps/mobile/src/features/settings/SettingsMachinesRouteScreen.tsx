@@ -6,6 +6,8 @@ import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import {
+  deriveMeshFooterStatus,
+  meshFooterText,
   offlineMachineText,
   meshMachineDetailRows,
   partitionMeshMachines,
@@ -78,12 +80,36 @@ export function SettingsMachinesRouteScreen() {
     machines.filter((machine) => !online(machine)).map((machine) => `${machine.label} is offline`),
   );
   const updateProblems = meshUpdateProblems(mesh.state?.snapshot?.document ?? {});
+  // Settings is where the phone always shows the mesh state, since the dock hides it when synced.
+  // Servers older than the flag omit `meshEnabled`; its contract default is on.
+  const meshEnabled = environments.some(
+    (environment) =>
+      environment.serverConfig?.settings.meshEnabled !== false &&
+      environment.serverConfig?.settings.linkedEnvironmentsEnabled === true,
+  );
+  const footerStatus = deriveMeshFooterStatus({ enabled: meshEnabled, machines: allMachines, now });
+  const footerText = meshFooterText(footerStatus);
+  const meshProblem = footerStatus.kind !== "hidden" && footerStatus.severity !== "ok";
   return (
     <SettingsScreen title="Mesh">
       <ScreenScrollView contentContainerClassName="gap-3 px-5 py-4">
         <SettingsSection
           title={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter(online).length} online`}
         >
+          {footerText === null ? null : (
+            <View className="flex-row items-center gap-2 px-4 pt-3">
+              <View
+                accessibilityElementsHidden
+                className={`size-1.5 shrink-0 rounded-full ${meshProblem ? "bg-warning-foreground" : "bg-adaptive-emerald-600-400"}`}
+              />
+              <AppText
+                accessibilityLiveRegion="polite"
+                className={`text-xs ${meshProblem ? "text-warning-foreground" : "text-foreground-muted"}`}
+              >
+                {footerText}
+              </AppText>
+            </View>
+          )}
           <View className="flex-row flex-wrap gap-2 p-4">
             <Button
               label="Set up the mesh with an agent"
