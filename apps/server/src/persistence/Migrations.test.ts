@@ -35,6 +35,18 @@ const v2TableCount = Effect.gen(function* () {
   return rows.length;
 });
 
+const messageSearchTextColumns = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = yield* sql<{ readonly name: string }>`
+    PRAGMA table_info(orchestration_v2_projection_messages)
+  `;
+  return rows.map((row) => row.name);
+});
+
+const assertUpstream81Applied = Effect.gen(function* () {
+  assert.include(yield* messageSearchTextColumns, "search_text");
+});
+
 describe("runMigrations", () => {
   it.effect("refuses to start when another migration took a V2 id", () =>
     Effect.gen(function* () {
@@ -195,11 +207,53 @@ describe("runMigrations", () => {
   it.effect("upgrades an upstream-only database by adding the fork ledger", () =>
     Effect.gen(function* () {
       yield* runMigrations({ toMigrationInclusive: 80 });
-      assert.deepStrictEqual(
-        (yield* runMigrations()).map(([id]) => id),
-        forkMigrations.map(([id]) => id),
-      );
+      assert.notInclude(yield* messageSearchTextColumns, "search_text");
+      assert.deepStrictEqual(yield* runMigrations(), [
+        [81, "ProjectionMessageSearchText"],
+        ...forkMigrations,
+      ]);
+      yield* assertUpstream81Applied;
       assert.deepStrictEqual(yield* history, migrationManifest);
+      assert.deepStrictEqual(yield* runMigrations(), []);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  // 0.1.8-sidebar.76 shipped upstream through 80 plus the fork ledger 1000-1004. This build adds
+  // upstream 81 only; the fork ledger must stay exactly as that release wrote it.
+  it.effect("applies only upstream 81 to a database migrated by 0.1.8-sidebar.76", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 80 });
+      yield* sql`CREATE TABLE effect_sql_fork_migrations (
+        migration_id INTEGER PRIMARY KEY NOT NULL,
+        created_at datetime NOT NULL DEFAULT current_timestamp,
+        name VARCHAR(255) NOT NULL
+      )`;
+      for (const migration of [
+        legacyMeshLayout,
+        peerConnections,
+        peerIdentityBindings,
+        receiptRetention,
+        closeTerminalRunNodes,
+      ]) {
+        yield* migration;
+      }
+      for (const [id, name] of forkMigrationManifest) {
+        yield* sql`
+          INSERT INTO effect_sql_fork_migrations (migration_id, name) VALUES (${id}, ${name})
+        `;
+      }
+      const forkLedgerBefore =
+        yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations ORDER BY migration_id`;
+
+      assert.notInclude(yield* messageSearchTextColumns, "search_text");
+      assert.deepStrictEqual(yield* runMigrations(), [[81, "ProjectionMessageSearchText"]]);
+      yield* assertUpstream81Applied;
+      assert.deepStrictEqual(yield* history, migrationManifest);
+      assert.deepStrictEqual(
+        yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations ORDER BY migration_id`,
+        forkLedgerBefore,
+      );
       assert.deepStrictEqual(yield* runMigrations(), []);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
@@ -248,9 +302,15 @@ describe("runMigrations", () => {
               [78, "DropOrchestrationEventCorrelationIndex"],
               [79, "DelegatedRecoveryIndexes"],
               [80, "ScheduledTaskThreadMode"],
+              [81, "ProjectionMessageSearchText"],
             ]
-          : [[80, "ScheduledTaskThreadMode"]],
+          : [
+              [80, "ScheduledTaskThreadMode"],
+              [81, "ProjectionMessageSearchText"],
+            ],
       );
+      // The legacy fork's 81 must not stand in for upstream's 81: the real migration ran too.
+      yield* assertUpstream81Applied;
       assert.deepStrictEqual(yield* history, migrationManifest);
       assert.deepStrictEqual(
         (yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations ORDER BY migration_id`).map(
@@ -287,11 +347,13 @@ describe("runMigrations", () => {
 
       assert.deepStrictEqual(yield* runMigrations(), [
         [80, "ScheduledTaskThreadMode"],
+        [81, "ProjectionMessageSearchText"],
         [1002, "PeerIdentityBindings"],
         [1003, "PeerReceiptRetention"],
         [1004, "CloseTerminalRunNodes"],
       ]);
       assert.deepStrictEqual(yield* history, migrationManifest);
+      yield* assertUpstream81Applied;
       assert.deepStrictEqual(
         (yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations ORDER BY migration_id`).map(
           (row) => [row.migration_id, row.name] as const,
@@ -334,6 +396,7 @@ describe("runMigrations", () => {
 
       assert.deepStrictEqual(yield* runMigrations(), [
         [80, "ScheduledTaskThreadMode"],
+        [81, "ProjectionMessageSearchText"],
         [1002, "PeerIdentityBindings"],
         [1003, "PeerReceiptRetention"],
         [1004, "CloseTerminalRunNodes"],
