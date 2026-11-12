@@ -10,10 +10,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildPendingNewTasks,
+  isQueuedCreationSending,
   type PendingDraftProjectDefaults,
+  type ThreadOutboxSendGate,
   pendingDraftBranchNeedsRefs,
   resolvePendingDraftBranch,
 } from "./pending-new-tasks-model";
+import { withLaunchingThreads } from "./pending-thread-creation";
 import type { QueuedThreadMessage } from "./thread-outbox-model";
 import type { ComposerDraft, ComposerDraftWorkspaceSelection } from "./use-composer-drafts";
 
@@ -141,5 +144,32 @@ describe("buildPendingNewTasks", () => {
     expect(new Set(tasks.map((task) => task.environmentId))).toEqual(
       new Set(["syncing", "read-only", "retrying", "offline", "sending"]),
     );
+  });
+});
+
+describe("launching creations", () => {
+  const sending = EnvironmentId.make("sending");
+  const message = queuedCreation("sending");
+  const gate: ThreadOutboxSendGate = {
+    connectedEnvironmentIds: new Set([sending]),
+    operableEnvironmentIds: new Set([sending]),
+    shellStatuses: new Map([[sending, "live"]]),
+    retryingMessageIds: {},
+  };
+
+  it("moves a sending creation from the unsent list into the thread list", () => {
+    // buildPendingNewTasks hides the row so it does not flash "Unsent"…
+    expect(isQueuedCreationSending(message, gate)).toBe(true);
+    expect(buildPendingNewTasks({ queuedMessages: [message], drafts: {}, sendGate: gate })).toEqual(
+      [],
+    );
+    // …and the screens re-add it as a preparing thread through useLaunchingThreads.
+    const listed = withLaunchingThreads({
+      threads: [],
+      launches: [message],
+      hiddenThreadKeys: new Set(),
+    });
+    expect(listed.map((thread) => thread.id)).toEqual([message.threadId]);
+    expect(listed[0]?.runtime?.status).toBe("preparing");
   });
 });
