@@ -362,7 +362,7 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
 
 export type MeshFooterStatus =
   | { readonly kind: "hidden" }
-  | { readonly kind: "synced"; readonly count: number }
+  | { readonly kind: "synced"; readonly count: number; readonly severity: "ok" }
   | {
       readonly kind: "unreachable";
       readonly count: number;
@@ -370,6 +370,7 @@ export type MeshFooterStatus =
       readonly label: string;
       readonly tag: string;
       readonly minutes: number;
+      readonly severity: "error";
     };
 
 /** A minute by minute reading of the footer line; `hidden` when the mesh is off or unknown. */
@@ -397,9 +398,10 @@ export function deriveMeshFooterStatus(input: {
       label: failing.label,
       tag: failing.tag,
       minutes: Math.floor(elapsed / 60_000),
+      severity: "error",
     };
   }
-  return { kind: "synced", count: machines.length };
+  return { kind: "synced", count: machines.length, severity: "ok" };
 }
 
 /** The sidebar footer text, kept out of the components so both clients say the same thing. */

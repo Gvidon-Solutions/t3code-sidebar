@@ -173,7 +173,6 @@ import {
 import { WorkspaceAgentGroup } from "./WorkspaceAgentGroup";
 import { WorkspaceUpdateStrip } from "./WorkspaceUpdateStrip";
 import { MachinesDialog } from "./MachinesDialog";
-import { MeshFooterStatus } from "./MeshFooterStatus";
 import { MeshConnectPrompt } from "../sidebar/MeshConnectPrompt";
 import { PendingReplicaRow } from "./PendingReplicaRow";
 import {
@@ -2075,7 +2074,6 @@ export default function WorkspaceSidebar() {
         onReorder={reorderWorkspace}
       />
       <MeshConnectPrompt config={config} />
-      <MeshFooterStatus config={config} />
       <SidebarChromeFooter />
       {iconPickerFolder ? (
         <Suspense fallback={null}>

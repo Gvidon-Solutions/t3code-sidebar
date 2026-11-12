@@ -1,3 +1,6 @@
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
@@ -44,4 +47,32 @@ it.each([
     { scheme: "https", host, pathPrefix: "/threads/" },
   ]);
   expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
+});
+
+type WidgetEntry = {
+  readonly name: string;
+  readonly ios?: { readonly initialLayout?: string };
+  readonly android?: { readonly initialLayout?: string } | null;
+};
+
+function widgetEntries(config: Awaited<ReturnType<typeof loadConfig>>): readonly WidgetEntry[] {
+  for (const plugin of (config.plugins ?? []) as readonly unknown[]) {
+    if (!Array.isArray(plugin) || plugin[0] !== "expo-widgets") continue;
+    return ((plugin[1] as { widgets?: readonly WidgetEntry[] }).widgets ?? []) as WidgetEntry[];
+  }
+  return [];
+}
+
+// The iOS build exits 65 when a widget points at a layout file the merge removed.
+it("registers only widget layouts that exist in the app tree", async () => {
+  const config = await loadConfig("sidebar");
+  const widgets = widgetEntries(config);
+  expect(widgets.map((widget) => widget.name)).toEqual(["SubscriptionUsage"]);
+  const appDir = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+  for (const widget of widgets) {
+    for (const layout of [widget.ios?.initialLayout, widget.android?.initialLayout]) {
+      if (layout === undefined) continue;
+      expect(NodeFS.existsSync(NodePath.resolve(appDir, layout))).toBe(true);
+    }
+  }
 });

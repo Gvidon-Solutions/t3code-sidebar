@@ -7,6 +7,7 @@ const reactTests = [
   "src/features/connection/ConnectionEnvironmentRow.test.tsx",
   "src/features/connection/PullRequestRoutingSettings.test.tsx",
   "src/features/workspaces/MeshInterfaces.test.tsx",
+  "src/features/workspaces/MeshFooterStatus.test.tsx",
   "src/features/settings/SettingsMachinesRouteScreen.test.tsx",
   "src/features/files/OpenFileRouteScreen.test.tsx",
   "src/features/workspaces/FileMachineTag.test.tsx",
