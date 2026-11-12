@@ -4,6 +4,7 @@ import { userEvent } from "vite-plus/test/browser";
 
 const persisted = vi.hoisted(() => ({ title: "" }));
 const mesh = vi.hoisted(() => ({ config: null as unknown }));
+const openMenu = vi.hoisted(() => vi.fn());
 vi.mock(import("../../state/session"), async (importOriginal) => ({
   ...(await importOriginal()),
   useEnvironmentScope: () => true,
@@ -18,7 +19,7 @@ vi.mock(import("../../state/use-orchestration-command"), async (importOriginal) 
     }) as never,
 }));
 vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
-  useThreadActionMenu: () => ({ openMenu: () => {}, closeMenu: () => {} }),
+  useThreadActionMenu: () => ({ openMenu, closeMenu: () => {} }),
 }));
 vi.mock(import("../../hooks/useMeshLayout"), () => ({
   useMeshLayout: () => ({
@@ -30,7 +31,7 @@ vi.mock(import("../../hooks/useMeshLayout"), () => ({
   useMeshLayoutOptional: (() => ({ config: mesh.config as never, source: null })) as never,
 }));
 
-import { render } from "../../../test/render";
+import { render, stubGlobal } from "../../../test/render";
 import { ChatHeader } from "./ChatHeader";
 
 function header(title: string) {
@@ -105,4 +106,12 @@ it("keeps the machine tag directly after the thread title", async () => {
   expect(title!.compareDocumentPosition(tag!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   // The title no longer grows to the far end of the header; it truncates before the tag.
   expect(getComputedStyle(title!).flexGrow).toBe("0");
+});
+
+it("opens the thread menu on a desktop title click without waiting", async () => {
+  openMenu.mockClear();
+  using _bridge = stubGlobal("desktopBridge", {});
+  await using screen = await render(header("New thread"));
+  await screen.getByRole("button", { name: "Thread actions for New thread" }).click();
+  expect(openMenu).toHaveBeenCalledOnce();
 });

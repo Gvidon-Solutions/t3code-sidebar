@@ -34,7 +34,9 @@ export function ComposerInlineControl(props: {
   readonly label: string;
   /** Secondary token such as a reasoning effort, kept visible while the label truncates. */
   readonly detail?: string | null;
+  readonly labelEllipsizeMode?: ComponentProps<typeof Text>["ellipsizeMode"];
   readonly suffix?: ReactNode;
+  readonly suffixWidth?: number;
   /** Show only the icon and chevron; the label still names the control for accessibility. */
   readonly iconOnly?: boolean;
   readonly maxWidth?: ViewStyle["maxWidth"];
@@ -99,6 +101,7 @@ export function ComposerInlineControl(props: {
                 props.emphasized || props.selected ? "text-foreground" : "text-foreground-muted",
               )}
               numberOfLines={1}
+              ellipsizeMode={props.labelEllipsizeMode}
             >
               {props.label}
             </Text>
@@ -110,7 +113,12 @@ export function ComposerInlineControl(props: {
           </Text>
         ) : null}
         {!props.iconOnly && props.suffix ? (
-          <View className="min-w-0 shrink">{props.suffix}</View>
+          <View
+            className={cn("min-w-0", props.suffixWidth === undefined ? "shrink" : "shrink-0")}
+            style={{ width: props.suffixWidth }}
+          >
+            {props.suffix}
+          </View>
         ) : null}
         {props.showChevron === false ? null : (
           <SymbolView

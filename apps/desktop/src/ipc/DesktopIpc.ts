@@ -2,17 +2,27 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
+
+export interface DesktopIpcSenderFrame {
+  readonly url?: string;
+  readonly parent?: unknown;
+}
+
 export interface DesktopIpcInvokeEvent {
   readonly sender: { readonly id: number };
-  readonly senderFrame?: { readonly url: string; readonly parent: unknown | null } | null;
+  readonly senderFrame?: DesktopIpcSenderFrame | null;
 }
 
 export interface DesktopIpcSyncEvent extends DesktopIpcInvokeEvent {
   returnValue: unknown;
 }
+
+export type DesktopIpcSenderGuard = (event: DesktopIpcInvokeEvent) => Effect.Effect<boolean>;
 
 export type DesktopIpcHandleListener = (
   event: DesktopIpcInvokeEvent,
@@ -54,6 +64,15 @@ export class DesktopIpcUnregistrationError extends Schema.TaggedError<DesktopIpc
   }
 }
 
+export class DesktopIpcUntrustedSenderError extends Schema.TaggedError<DesktopIpcUntrustedSenderError>()(
+  "DesktopIpcUntrustedSenderError",
+  { channel: Schema.String },
+) {
+  override get message(): string {
+    return `Rejected ${this.channel} from a sender that is not the app window.`;
+  }
+}
+
 export const DesktopIpcError = Schema.Union([
   DesktopIpcRegistrationError,
   DesktopIpcUnregistrationError,
@@ -85,6 +104,7 @@ export class DesktopIpc extends Context.Service<
 export const make = (
   ipcMain: DesktopIpcMain,
   authorize: (event: DesktopIpcInvokeEvent, channel: string) => void,
+  isTrustedSender: DesktopIpcSenderGuard,
 ): DesktopIpc["Service"] =>
   DesktopIpc.of({
     handle: Effect.fn("desktop.ipc.registerInvoke")(function* <E, R>({
@@ -104,6 +124,9 @@ export const make = (
                 Effect.gen(function* () {
                   yield* Effect.sync(() => authorize(event, channel));
                   yield* Effect.annotateCurrentSpan({ channel });
+                  if (!(yield* isTrustedSender(event))) {
+                    return yield* new DesktopIpcUntrustedSenderError({ channel });
+                  }
                   return yield* handler(raw, event);
                 }).pipe(Effect.annotateLogs({ channel }), Effect.withSpan("desktop.ipc.invoke")),
               ),
@@ -146,6 +169,11 @@ export const make = (
               const exit = Effect.runSyncExitWith(context)(
                 Effect.gen(function* () {
                   yield* Effect.annotateCurrentSpan({ channel });
+                  // Throwing here would surface as an uncaught main-process exception.
+                  if (!(yield* isTrustedSender(event))) {
+                    yield* Effect.logWarning("Rejected sync IPC from an untrusted sender.");
+                    return undefined;
+                  }
                   return yield* handler(event);
                 }).pipe(
                   Effect.annotateLogs({ channel }),
@@ -181,7 +209,32 @@ export const make = (
 export const layer = (
   ipcMain: DesktopIpcMain,
   authorize: (event: DesktopIpcInvokeEvent, channel: string) => void,
-) => Layer.succeed(DesktopIpc, make(ipcMain, authorize));
+) =>
+  Layer.effect(
+    DesktopIpc,
+    Effect.gen(function* () {
+      const electronWindow = yield* ElectronWindow.ElectronWindow;
+      return make(ipcMain, authorize, (event) =>
+        Effect.map(
+          electronWindow.main,
+          (main) =>
+            Option.isSome(main) &&
+            main.value.webContents.id === event.sender.id &&
+            main.value.webContents.mainFrame === (event.senderFrame as unknown),
+        ),
+      );
+    }),
+  );
+
+export const layerTest = (ipcMain: DesktopIpcMain) =>
+  Layer.succeed(
+    DesktopIpc,
+    make(
+      ipcMain,
+      () => undefined,
+      () => Effect.succeed(true),
+    ),
+  );
 
 export interface DesktopIpcMethodRegistration<
   Payload,

@@ -28,12 +28,15 @@ export function authorizeDesktopIpc(
   currentUrl: string | undefined,
 ): void {
   const frame = event.senderFrame;
-  const url = frame ? URL.parse(frame.url) : null;
+  const frameUrl = frame?.url;
+  const url = frameUrl === undefined ? null : URL.parse(frameUrl);
   if (
     !url ||
+    !frame ||
+    frameUrl === undefined ||
     !currentUrl ||
-    frame?.parent !== null ||
-    frame.url !== currentUrl ||
+    frame.parent !== null ||
+    frameUrl !== currentUrl ||
     !["t3code:", "t3code-dev:"].includes(url.protocol) ||
     (!isBundledUiUrl(url.href) &&
       !(serverUiRendererId(url.host) === event.sender.id && serverChannels.has(channel)))

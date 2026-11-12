@@ -14,6 +14,7 @@ import IconHome from "@tabler/icons-react-native/IconHome";
 import IconRobot from "@tabler/icons-react-native/IconRobot";
 import IconRocket from "@tabler/icons-react-native/IconRocket";
 import IconSchool from "@tabler/icons-react-native/IconSchool";
+// oxlint-disable-next-line t3code/no-sparkles-icon -- project icon choice in the picker, not an AI label
 import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconStar from "@tabler/icons-react-native/IconStar";
 import IconUsers from "@tabler/icons-react-native/IconUsers";

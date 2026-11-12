@@ -22,8 +22,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.8` (`bf469bb196`, tagged 2026-11-09) on
-  2026-11-11 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.9` (`24e77473ec`, tagged 2026-11-11) on
+  2026-11-12 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
@@ -108,6 +108,53 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
+
+### 2026-11-12 — Upstream release v0.1.9
+
+- **What.** Takes upstream v0.1.9 (198 changes, 31 contributors): approving agent sign-ins with
+  T3 Connect instead of a pairing code, sending while attachments upload, one Claude-session MCP
+  approval instead of per action, screen-reader turn announcements, GitLab merge-request revert,
+  OpenCode goals synced across clients, and pull-request links that open on their comment, diff
+  line, checks or commit. The fork keeps its web, desktop and mobile features: the workspace
+  sidebar, mesh, inbox, voice and thread tabs; the mobile layout stays the fork's (workspace
+  panes, custom composer and headers), taking only upstream's native-column width for the feed and
+  its menu-placement helper.
+- **How.** The desktop IPC trust guard from upstream (frame identity against the main window)
+  joins the fork's `authorize` callback: `make`/`layer` take both, `layerTest` answers for tests,
+  and the sync reply checks both before running its handler. `pinnedRuntime` keeps the fork's
+  `DownloadError` unwrapping for the timeout step and reads upstream's `httpStatus`/`downloadHost`
+  from the wrapped cause. In mobile, `AdaptiveWorkspaceLayout`, its context, the iOS stack
+  navigator, `ReviewSheet`, `ThreadHeader`, `ThreadRouteScreen`, `ThreadNavigationSidebar`,
+  `WorkspaceNativeTabs`, `HomeRouteScreen`, `ThreadComposer`, the files screens and the composer
+  take the fork's versions; `ThreadDetailScreen` adds upstream's `screenWidth` measurement and
+  wraps the feed in `ColumnWidth`, and `ThreadFeed` regains the `contentTopInset` prop. The icon
+  map gains upstream's `robot`, `flask`, `ellipsis.bubble`, `tray.and.arrow.down` and
+  `wrench.and.screwdriver` entries. `AndroidAnchoredMenu` uses `deriveMenuVerticalPlacement` and
+  keeps the fork's explicit in-window row height. The fork keeps the mesh `locateFile` flow for
+  chat file links (no upstream early return) and the mesh lookup in the mobile feed. Deleted
+  upstream mobile files (upstream's separate `AppSymbol.android`, `FilePreviewSession`,
+  `inspector-host`, `useSidebarToggle`, `WorkspaceThreadSidebar`, `workspace-list-insets`,
+  `ComposerModelControl`, `useBarInset`) stay deleted with the fork's replacements. Fork tests
+  that mock the layout expose `useAdaptiveWorkspaceLayout`, upstream's new `Sidebar.drag` test
+  runs against the thread-list sidebar, upstream's new files use `/home/dev` instead of
+  `/home/user` and a neutral `dev` detail key, and the new `mobile-dev-client.yml` is SHA-pinned
+  and gated on the fork's repository.
+- **Where.** `apps/desktop/src/ipc/{DesktopIpc.ts,rendererTrust.ts,DesktopIpc.test.ts}`,
+  `apps/desktop/src/main.ts`, `apps/desktop/src/ipc/methods/*.test.ts`,
+  `apps/server/src/{cloud/pinnedRuntime.ts,auth/{McpOAuth,RpcAuthorization}.ts,mcp/threadAccess.ts,persistence/{Migrations.ts,reconcileV2PreviewMigration.test.ts},orchestration-v2/Adapters/ClaudeAdapterV2.ts,ws.test.ts,peer/PeerLinkRequests.test.ts,peer/connection/{PeerNetwork,PeerSessions}.test.ts,replicas/MeshSsh.test.ts,provider/agentContextBudget.json}`,
+  `apps/web/src/components/{ChatMarkdown.tsx,ChatView.tsx,Sidebar.drag.browser.test.tsx}`,
+  `apps/web/src/components/chat/{ChatComposer.tsx,ChatHeader.browser.test.tsx}`,
+  `apps/web/src/{rightPanelStore.ts,markdown-links.ts}`,
+  `apps/mobile/src/components/ui/{AppSymbol.tsx,AndroidAnchoredMenu.tsx,ComposerToolbar.tsx,NativeAppBar.android.tsx}`,
+  `apps/mobile/src/features/layout/{AdaptiveWorkspaceLayout.tsx,adaptive-workspace-context.ts,createWorkspaceStackNavigator.ios.tsx}`,
+  `apps/mobile/src/features/threads/{ThreadDetailScreen.tsx,ThreadFeed.tsx,ThreadHeader.tsx,ThreadRouteScreen.tsx,ThreadNavigationSidebar.tsx,ThreadComposer.tsx,thread-work-log.tsx,thread-inspector-navigation.ts,thread-inspector-navigation.test.tsx}`,
+  `apps/mobile/src/features/{files,home,workspace,pull-requests,settings,review}/*`,
+  `apps/mobile/src/{lib/{highlights.ts,layout.ts,threadActivity.ts},native/*,state/assets.ts}`,
+  `apps/mobile/src/lib/filePreview.test.ts`, `.github/workflows/mobile-dev-client.yml`,
+  `evals/mcp-tool-use/{cases/file-links.ndjson,file-link-grading.test.ts}`,
+  `apps/web/src/workspaceBasenameLookup.test.ts`,
+  `packages/provider-acp/src/server/runtimeModel.test.ts`,
+  `packages/provider-acp-registry/src/server/driver.ts`, `knip.jsonc`; `docs/mesh/README.md`.
 
 ### 2026-11-11 — Android thread open keeps the true feed end
 

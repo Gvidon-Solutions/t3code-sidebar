@@ -52,7 +52,6 @@ it.live(
         ids: Effect.succeed([EnvironmentId.make("laptop-env")]),
         list: Effect.succeed([]),
         link: () => Effect.die("Unexpected link"),
-        describe: () => Effect.succeedNone,
         acceptGrant: () => Effect.void,
         get: () => Effect.succeedNone,
         unlink: () => Effect.succeed(false),

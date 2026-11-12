@@ -33,6 +33,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as LegacySessions from "../../auth/SessionStore.ts";
 import { mcpClientScopes } from "@t3tools/contracts";
+import * as CloudLink from "../../cloud/CloudLink.ts";
 import * as Auth from "../../auth/EnvironmentAuth.ts";
 import * as AuthHttp from "../../auth/http.ts";
 import * as OAuth from "../../auth/McpOAuth.ts";
@@ -141,6 +142,18 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       Layer.provideMerge(Config.layerTest(process.cwd(), { prefix: "mesh-network-" })),
       Layer.provideMerge(
         Layer.mergeAll(NodeServices.layer, EffectNodeCrypto.layer, ManagedPolicy.layerTest()),
+      ),
+      Layer.provideMerge(
+        Layer.mock(CloudLink.CloudLink)({
+          linkState: () =>
+            Effect.succeed({
+              linked: false,
+              cloudUserId: null,
+              relayUrl: null,
+              relayIssuer: null,
+              publishAgentActivity: false,
+            }),
+        }),
       ),
       Layer.fresh,
     ),

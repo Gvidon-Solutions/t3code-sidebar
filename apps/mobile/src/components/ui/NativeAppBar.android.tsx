@@ -10,11 +10,13 @@ export function NativeAppBar(props: {
   readonly title: ReactElement;
   readonly navigationIcon?: ReactElement;
   readonly actions?: ReactElement;
+  /** Compose nodes laid out by the bar itself, so they never wait on a React Native measure. */
+  readonly nativeActions?: ReactElement;
   /** Shorter bar for a one-row title. */
   readonly singleLine?: boolean;
 }) {
   const { colors } = useControlTheme();
-  const layout = useToolbarLayout(false, props.singleLine);
+  const layout = useToolbarLayout();
   return (
     // The bar's height is fixed, so React Native lays out the screen below it from the first frame
     // instead of at zero height until Compose has measured and reported the bar.

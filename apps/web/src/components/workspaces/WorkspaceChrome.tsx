@@ -15,6 +15,7 @@ import {
   PlusIcon,
   RocketIcon,
   RowsIcon,
+  // oxlint-disable-next-line t3code/no-sparkles-icon -- project icon choice in the picker, not an AI label
   SparklesIcon,
   StarIcon,
   UsersIcon,

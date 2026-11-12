@@ -54,6 +54,7 @@ const GLYPH_LABELS: ReadonlyArray<readonly [string, string]> = [
   ["users", "Team"],
   ["heart", "Heart"],
   ["star", "Star"],
+  // oxlint-disable-next-line t3code/no-sparkles-icon -- project icon choice in the picker, not an AI label
   ["sparkles", "Sparkles"],
   ["game", "Games"],
 ];

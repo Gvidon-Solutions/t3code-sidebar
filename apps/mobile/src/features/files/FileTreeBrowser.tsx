@@ -212,6 +212,7 @@ export function FileTreeBrowser(props: {
   return (
     <LegendList
       renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
+      nestedScrollEnabled={false}
       alwaysBounceVertical
       className="flex-1"
       data={visibleNodes}

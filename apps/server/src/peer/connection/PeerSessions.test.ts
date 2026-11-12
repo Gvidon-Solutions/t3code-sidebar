@@ -141,7 +141,6 @@ const dependencies = (ids: ReadonlyArray<EnvironmentId>) =>
       PeerLinks.PeerLinks.of({
         enabled: Effect.succeed(true),
         link: () => Effect.die("not used"),
-        describe: () => Effect.succeedNone,
         list: Effect.succeed([]),
         ids: Effect.succeed(ids),
         acceptGrant: () => Effect.void,

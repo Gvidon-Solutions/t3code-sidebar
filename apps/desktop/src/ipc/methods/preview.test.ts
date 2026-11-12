@@ -52,6 +52,7 @@ describe("preview IPC methods", () => {
             on: vi.fn(),
           },
           () => undefined,
+          () => Effect.succeed(true),
         );
         yield* ipc.handle(method);
         return yield* Effect.promise(async () =>

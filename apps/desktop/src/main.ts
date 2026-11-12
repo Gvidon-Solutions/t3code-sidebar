@@ -146,7 +146,7 @@ const layerElectron = Layer.mergeAll(
       Electron.webContents.fromId(event.sender.id)!,
     );
     authorizeDesktopIpc(event, channel, window?.webContents.getURL());
-  }),
+  }).pipe(Layer.provide(ElectronWindow.layer)),
 );
 
 const layerDesktopFoundation = Layer.mergeAll(

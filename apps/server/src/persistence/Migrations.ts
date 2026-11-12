@@ -88,6 +88,7 @@ import ForkMigration1001 from "./Migrations/1001_PeerConnections.ts";
 import ForkMigration1002 from "./Migrations/1002_PeerIdentityBindings.ts";
 import ForkMigration1003 from "./Migrations/1003_PeerReceiptRetention.ts";
 import ForkMigration1004 from "./Migrations/1004_CloseTerminalRunNodes.ts";
+import Migration0081 from "./Migrations/081_ProjectionMessageSearchText.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -171,6 +172,7 @@ const migrationEntries = [
   [78, "DropOrchestrationEventCorrelationIndex", Migration0078],
   [79, "DelegatedRecoveryIndexes", Migration0079],
   [80, "ScheduledTaskThreadMode", Migration0080],
+  [81, "ProjectionMessageSearchText", Migration0081],
 ] as const;
 
 // Sidebar fork: the fork's own migrations live in a separate ledger under their own id range,

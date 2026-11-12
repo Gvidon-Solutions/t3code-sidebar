@@ -67,6 +67,7 @@ effectIt.effect(
           },
         },
         (event, channel) => authorizeDesktopIpc(event, channel, url),
+        () => Effect.succeed(true),
       );
       yield* ipc.handleSync({
         channel: Channels.TAKE_LEGACY_LOCAL_STORAGE_CHANNEL,
@@ -103,6 +104,7 @@ effectIt.effect(
           },
         },
         (event, channel) => authorizeDesktopIpc(event, channel, url),
+        () => Effect.succeed(true),
       );
       yield* ipc.handleSync({
         channel: Channels.UI_SERVER_NAME_CHANNEL,
