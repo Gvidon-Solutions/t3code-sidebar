@@ -185,6 +185,16 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
               : cause.reason === "timeout"
                 ? "downloading the t3 release archive (timed out)"
                 : "downloading the t3 release archive",
+          httpStatus:
+            HttpClientError.isHttpClientError(cause.cause) &&
+            cause.cause.reason._tag === "StatusCodeError"
+              ? cause.cause.reason.response.status
+              : undefined,
+          downloadHost: URL.parse(
+            HttpClientError.isHttpClientError(cause.cause)
+              ? cause.cause.request.url
+              : cliReleaseAssetUrl(input.version, fileName, input.releaseBaseUrl),
+          )?.host,
           cause: cause.cause ?? cause,
         }),
     ),
