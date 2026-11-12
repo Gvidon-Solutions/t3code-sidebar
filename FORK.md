@@ -128,11 +128,15 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   fixture sets for every node. A pure `rolloutDecision` helper treats a first-machine
   `rolled-back`/`failed` state as terminal and polls with the same 120 s budget at 250 ms. The SSH
   banner stall that motivated the pipe tracing is still unexplained: these changes record and
-  localize it, and do not claim the whole mesh CI instability is fixed.
+  localize it, and do not claim the whole mesh CI instability is fixed. The mesh-fast runner also
+  creates and canonicalizes the artifacts directory before `mkdtemp`, so a symlinked
+  `MESH_FAST_ARTIFACTS_DIR` keeps every fixture root inside the canonical `process.cwd()` match
+  and leaves the Mutagen daemon lock visible to the replica checks; the product `t3 run` behavior
+  for paths that only reach a replica through a symlink is unchanged.
 - **Where.** `packages/shared/src/meshConfig/{identity.ts,identity.test.ts}`,
   `apps/server/src/replicas/{MutagenRunner.ts,MutagenCommands.test.ts}`,
   `apps/server/src/peer/connection/{PeerPipeIpc.ts,PeerSessions.ts,pipeDiagnostics.ts,pipeDiagnostics.test.ts}`,
-  `scripts/mesh-fast/{rollout.mjs,rollout-outcome.ts,rollout-outcome.test.ts,mesh.mjs}`.
+  `scripts/mesh-fast/{run.mjs,run-root.mjs,run-root.test.ts,rollout.mjs,rollout-outcome.ts,rollout-outcome.test.ts,mesh.mjs}`.
 
 ### 2026-11-12 — Upstream release v0.1.9
 

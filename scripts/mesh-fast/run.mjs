@@ -3,6 +3,7 @@ import { previous } from "./previous.mjs";
 import { runtimes } from "./runtimes.mjs";
 import { prepare } from "./prepare.mjs";
 import { prunePassed, pruneRuns, finishRun } from "./artifacts.mjs";
+import { createRunRoot } from "./run-root.mjs";
 import { defaultJobs, ownership, assertHostLease, recoverStale } from "./lifecycle.mjs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -108,12 +109,8 @@ if (filter === "@host-info") {
   process.exit(0);
 }
 if (!selected.length) throw Error(`No scenarios match ${filter}`);
-await NodeFSP.mkdir(host.artifactsDirectory, { recursive: true });
-// Fixture paths are matched against process.cwd(), which resolves symlinks. Keep the whole run
-// under its real path so a symlinked artifacts directory cannot make a replica look local.
-const artifactsDirectory = await NodeFSP.realpath(host.artifactsDirectory);
+const { artifactsDirectory, root } = await createRunRoot(host.artifactsDirectory);
 host.artifactsDirectory = artifactsDirectory;
-const root = await NodeFSP.mkdtemp(NodePath.join(artifactsDirectory, "mesh-fast-"));
 await NodeFSP.writeFile(NodePath.join(root, "runner.json"), JSON.stringify(host));
 console.log(`Host: ${owner.hostname}; cores ${owner.cores}; meshes ${jobs}; container boots 2`);
 console.log(`Run directory: ${root}`);
