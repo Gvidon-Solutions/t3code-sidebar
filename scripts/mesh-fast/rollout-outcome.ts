@@ -32,6 +32,64 @@ export type RolloutDecision =
       readonly reason: string;
     };
 
+export const READ_FAILURE_THRESHOLD = 3;
+
+export interface ServiceReadOutcome<T> {
+  readonly state?: T | undefined;
+  readonly missing?: boolean | undefined;
+  readonly error?: string | undefined;
+  readonly permanent?: boolean | undefined;
+}
+
+export interface ReadFailureProgress {
+  readonly failures: number;
+  readonly lastError?: string | undefined;
+}
+
+export interface ReadProgressDecision {
+  readonly failures: number;
+  readonly lastError?: string | undefined;
+  readonly pending: boolean;
+  readonly error?: string | undefined;
+}
+
+/**
+ * Tolerates a short run of transient read failures (a partially written JSON
+ * file or a busy `docker exec`) without retrying the rollout itself. A valid
+ * read or a missing state resets the streak; a reliably classified permission
+ * or invalid-path error stays terminal immediately.
+ */
+export function readProgress<T>(
+  previous: ReadFailureProgress,
+  outcome: ServiceReadOutcome<T>,
+  threshold = READ_FAILURE_THRESHOLD,
+): ReadProgressDecision {
+  if (outcome.state !== undefined || outcome.missing === true || outcome.error === undefined)
+    return { failures: 0, pending: true };
+  const failures = previous.failures + 1;
+  const lastError = outcome.error;
+  if (outcome.permanent === true || failures >= threshold)
+    return { failures, lastError, pending: false, error: lastError };
+  return { failures, lastError, pending: true };
+}
+
+/** Keeps the last observation and read cause when the outer deadline expires. */
+export function rolloutTimeoutMessage(
+  decision: RolloutDecision,
+  observations: readonly RolloutObservation[],
+  lastReadErrors: Readonly<Record<string, string | undefined>>,
+  timeoutMs: number,
+): string {
+  const errors = Object.entries(lastReadErrors)
+    .flatMap(([node, error]) => (error === undefined ? [] : [`${node}: ${error}`]))
+    .join("; ");
+  return `rollout did not reach the expected outcome within ${timeoutMs}ms: ${JSON.stringify({
+    decision,
+    observations,
+    ...(errors ? { lastReadErrors: errors } : {}),
+  })}`;
+}
+
 const terminalFailure = (state: RolloutServiceState) =>
   state.update?.status === "rolled-back" || state.update?.status === "failed";
 
