@@ -68,6 +68,21 @@ it("accepts only the committed first machine and deliberately rolled-back second
   ).toMatchObject({ status: "expected" });
 });
 
+it("does not accept a second-machine failure as the deliberate rollback", () => {
+  const decision = rolloutDecision(
+    [
+      first({ activeVersion: "0.1.6", update: { status: "committed" } }),
+      second({
+        activeVersion: "0.1.5",
+        update: { status: "failed", reason: "Health check crashed" },
+      }),
+    ],
+    expected,
+  );
+  expect(decision).toMatchObject({ status: "failed", node: "laptop", role: "second" });
+  expect(JSON.stringify(decision)).toContain("Health check crashed");
+});
+
 it("fails when the second machine commits despite the deliberate health failure", () => {
   expect(
     rolloutDecision(

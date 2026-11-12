@@ -89,7 +89,7 @@ export function rolloutDecision(
   if (first.state.activeVersion !== expected.targetVersion) return { status: "pending" };
   if (second.state === undefined) return { status: "pending" };
 
-  if (terminalFailure(second.state)) {
+  if (second.state.update?.status === "rolled-back") {
     if (second.state.activeVersion !== expected.secondVersion)
       return failure(
         second,
@@ -98,6 +98,12 @@ export function rolloutDecision(
       );
     return { status: "expected", first: first.state, second: second.state };
   }
+  if (second.state.update?.status === "failed")
+    return failure(
+      second,
+      second.state,
+      "reported a failed update instead of the deliberate rollback",
+    );
   if (second.state.activeVersion === expected.targetVersion)
     return failure(second, second.state, "committed despite the injected health failure");
   return { status: "pending" };
