@@ -1,4 +1,6 @@
 import { DESKTOP_UPDATE_RESTART_MARKER_FILE } from "@t3tools/contracts";
+// @effect-diagnostics nodeBuiltinImport:off - joins the runtime directory without adding an Effect requirement to the daemon finalizer.
+import * as NodePath from "node:path";
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -26,18 +28,27 @@ export const pendingServiceUpdateExists = Effect.gen(function* () {
   return Option.isSome(stateText) && serviceStateHasPendingUpdate(stateText.value);
 });
 
-export const pendingUpdateHandoffExists = Effect.gen(function* () {
-  if (!(yield* pendingServiceUpdateExists)) {
+/** Keeps callers that only know the T3 home (the Mutagen data directory's parent) independent of ServerConfig. */
+export const pendingUpdateHandoffAt = Effect.fn("pendingUpdateHandoffAt")(function* (
+  baseDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const runtimeDir = NodePath.join(baseDir, "runtime");
+  const stateText = yield* fs
+    .readFileString(NodePath.join(runtimeDir, SERVICE_STATE_FILE))
+    .pipe(Effect.option);
+  if (!(Option.isSome(stateText) && serviceStateHasPendingUpdate(stateText.value))) {
     return false;
   }
-  const config = yield* ServerConfig.ServerConfig;
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const runtimeDir = path.join(config.baseDir, "runtime");
   const stopping = yield* fs
-    .exists(path.join(runtimeDir, SERVICE_STOP_MARKER_FILE))
+    .exists(NodePath.join(runtimeDir, SERVICE_STOP_MARKER_FILE))
     .pipe(Effect.orElseSucceed(() => false));
   return !stopping;
+});
+
+export const pendingUpdateHandoffExists = Effect.gen(function* () {
+  const config = yield* ServerConfig.ServerConfig;
+  return yield* pendingUpdateHandoffAt(config.baseDir);
 });
 
 // Reading consumes it, so shutdown checks it first.

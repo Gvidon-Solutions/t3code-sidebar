@@ -15,6 +15,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as ProcessRunner from "../processRunner.ts";
+import { pendingUpdateHandoffAt } from "../cloud/updateHandoff.ts";
 import * as MutagenInstaller from "./MutagenInstaller.ts";
 
 const Problem = Schema.Struct({ path: Schema.String, error: Schema.String });
@@ -271,11 +272,20 @@ const make = Effect.gen(function* () {
   });
   yield* Effect.addFinalizer(() =>
     privateDaemonUsed
-      ? run(["daemon", "stop"]).pipe(
-          Effect.catch((cause) =>
-            Effect.logWarning("Cannot stop the private Mutagen daemon", { cause }),
+      ? pendingUpdateHandoffAt(installer.baseDir).pipe(
+          Effect.catchCause(() => Effect.succeed(false)),
+          Effect.flatMap((handoff) =>
+            handoff
+              ? Effect.logInfo(
+                  "Keeping the private Mutagen daemon across the service update handoff",
+                ).pipe(Effect.asVoid)
+              : run(["daemon", "stop"]).pipe(
+                  Effect.catch((cause) =>
+                    Effect.logWarning("Cannot stop the private Mutagen daemon", { cause }),
+                  ),
+                  Effect.asVoid,
+                ),
           ),
-          Effect.asVoid,
         )
       : Effect.void,
   );

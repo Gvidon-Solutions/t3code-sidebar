@@ -93,6 +93,7 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
             Layer.succeed(Installer.MutagenInstaller, {
               executable: Effect.succeed("/isolated/bin/mutagen"),
               dataDirectory: "/isolated/mutagen",
+              baseDir: "/isolated",
             }),
           ),
         ),
@@ -101,6 +102,92 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
     expect(calls.at(-1)?.args).toEqual(["daemon", "stop"]);
   }),
 );
+
+const updateHandoffState = JSON.stringify({
+  protocol: 3,
+  activeVersion: "0.1.5",
+  update: {
+    id: "update-handoff",
+    fromVersion: "0.1.5",
+    targetVersion: "0.1.6",
+    status: "pending",
+    dbPath: "/isolated/state/t3.sqlite",
+  },
+});
+
+const handoffRunner = (options: {
+  readonly calls: ProcessRunner.ProcessRunInput[];
+  readonly serviceState: boolean;
+  readonly stopMarker: boolean;
+}) => {
+  const statePath = "/isolated/runtime/service-state.json";
+  const stopMarkerPath = "/isolated/runtime/.service-stopping";
+  const processes = Layer.succeed(ProcessRunner.ProcessRunner, {
+    run: (input) =>
+      Effect.sync(() => {
+        options.calls.push(input);
+        return {
+          code: 0 as ProcessRunner.ProcessRunOutput["code"],
+          stdout: "[]",
+          stderr: "",
+          timedOut: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          stdoutInvalidUtf8: false,
+          stderrInvalidUtf8: false,
+        };
+      }),
+  });
+  const fs = Layer.succeed(
+    FileSystem.FileSystem,
+    FileSystem.makeNoop({
+      exists: (filePath) =>
+        Effect.succeed(
+          (options.serviceState && filePath === statePath) ||
+            (options.stopMarker && filePath === stopMarkerPath),
+        ),
+      readFileString: (filePath) =>
+        Effect.succeed(options.serviceState && filePath === statePath ? updateHandoffState : ""),
+    }),
+  );
+  return Runner.layer.pipe(
+    Layer.provide(fs),
+    Layer.provide(processes),
+    Layer.provide(Layer.succeed(HostProcess.Environment, { PATH: "fixture" })),
+    Layer.provide(
+      Layer.succeed(Installer.MutagenInstaller, {
+        executable: Effect.succeed("/isolated/bin/mutagen"),
+        dataDirectory: "/isolated/mutagen",
+        baseDir: "/isolated",
+      }),
+    ),
+  );
+};
+
+it.effect("keeps the private Mutagen daemon across an update handoff", () => {
+  const calls: ProcessRunner.ProcessRunInput[] = [];
+  return Effect.gen(function* () {
+    yield* Effect.gen(function* () {
+      const runner = yield* Runner.MutagenRunner;
+      yield* runner.daemon("start");
+    }).pipe(Effect.provide(handoffRunner({ calls, serviceState: true, stopMarker: false })));
+    expect(calls.map((call) => call.args)).toEqual([["daemon", "start"]]);
+  });
+});
+
+it.effect("still stops the private Mutagen daemon when the service is explicitly stopping", () => {
+  const calls: ProcessRunner.ProcessRunInput[] = [];
+  return Effect.gen(function* () {
+    yield* Effect.gen(function* () {
+      const runner = yield* Runner.MutagenRunner;
+      yield* runner.daemon("start");
+    }).pipe(Effect.provide(handoffRunner({ calls, serviceState: true, stopMarker: true })));
+    expect(calls.map((call) => call.args)).toEqual([
+      ["daemon", "start"],
+      ["daemon", "stop"],
+    ]);
+  });
+});
 
 it.effect("surfaces a bounded, redacted Mutagen failure reason", () =>
   Effect.gen(function* () {
@@ -222,6 +309,7 @@ it.effect("surfaces a bounded, redacted Mutagen failure reason", () =>
             Layer.succeed(Installer.MutagenInstaller, {
               executable: Effect.succeed("/isolated/bin/mutagen"),
               dataDirectory: "/isolated/mutagen",
+              baseDir: "/isolated",
             }),
           ),
         ),
@@ -307,6 +395,7 @@ it.effect("keeps process runner paths out of public Mutagen failures", () =>
             Layer.succeed(Installer.MutagenInstaller, {
               executable: Effect.succeed("/isolated/bin/mutagen"),
               dataDirectory: "/isolated/mutagen",
+              baseDir: "/isolated",
             }),
           ),
         ),

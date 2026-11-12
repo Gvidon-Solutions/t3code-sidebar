@@ -109,6 +109,27 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-13 — Mesh update keeps the private Mutagen daemon across the handoff
+
+- **What.** A service update handoff no longer stops the outgoing server's private
+  Mutagen daemon. The old finalizer stopped it on exit, but Mutagen closes the daemon
+  listener before it releases its POSIX lock, so the trial server's first
+  `mutagen sync list` could be caught in Mutagen's 6.5 s autostart window during a
+  long shutdown and fail the replica health check with
+  `unable to connect to daemon: connection timed out`. Keeping the daemon for the
+  successor makes the trial attach immediately instead of racing a shutdown. An
+  explicit service stop still stops it.
+- **How.** `MutagenRunner`'s scope finalizer asks the launcher state
+  (`runtime/service-state.json`) whether an update is pending and whether the explicit
+  stop marker (`runtime/.service-stopping`) exists. Only a pending handoff without the
+  stop marker keeps the private daemon and logs that choice; every other shutdown and
+  every explicit stop keeps the previous `daemon stop` cleanup. The daemon remains
+  private to the T3 home's `mutagen/` data directory, foreign daemons are untouched,
+  and crash recovery is unchanged because a crashed server still leaves the daemon
+  running for the next generation.
+- **Where.** `apps/server/src/cloud/updateHandoff.ts`,
+  `apps/server/src/replicas/{MutagenInstaller.ts,MutagenRunner.ts,MutagenCommands.test.ts}`.
+
 ### 2026-11-13 — Mesh CI: no-op revisions, Mutagen errors, pipe stages, rollout fail-fast
 
 - **What.** Reconciling machine identity now compares configs canonically, so the same machine keys

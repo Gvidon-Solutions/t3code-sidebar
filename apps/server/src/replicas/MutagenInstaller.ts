@@ -27,6 +27,7 @@ export class MutagenInstaller extends Context.Service<
   {
     readonly executable: Effect.Effect<string, ReplicaError>;
     readonly dataDirectory: string;
+    readonly baseDir: string;
   }
 >()("t3/replicas/MutagenInstaller") {}
 
@@ -98,6 +99,7 @@ const make = Effect.gen(function* () {
   });
   return MutagenInstaller.of({
     dataDirectory: join(baseDir, "mutagen"),
+    baseDir,
     executable: lock.withPermit(Effect.scoped(install())).pipe(
       Effect.mapError((cause) =>
         isReplicaError(cause)
