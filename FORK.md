@@ -109,6 +109,31 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-13 — Mesh CI: no-op revisions, Mutagen errors, pipe stages, rollout fail-fast
+
+- **What.** Reconciling machine identity now compares configs canonically, so the same machine keys
+  in a different insertion order keep the revision instead of publishing a new sequence and making
+  a concurrent writer's compare-and-set fail with `stale_revision`. Mutagen failures name the
+  operation and exit code and include a bounded, redacted stderr tail, so a banner timeout is
+  distinguishable from a connection refusal in MCP errors. Test-mode mesh fixtures trace managed-SSH
+  pipe stages (`ipc-*`, connector, first readable bytes) without logging payload bytes. The
+  bootstrap-rollout harness now fails as soon as the first machine rolls back instead of waiting up
+  to 120 s for the second.
+- **How.** `repairMachineIdentity` compares the repaired and incoming documents with `canonical`
+  (recursively sorted object keys, ordered arrays) instead of raw `JSON.stringify`; real machine
+  additions, removals, renames and updates-only repairs still report `changed` as before.
+  `MutagenRunner` normalizes ANSI/control characters, redacts URL userinfo, `wsTicket`/`dpop`,
+  secret assignments and PEM blocks, and tail-caps stderr at 512 characters; retry and timeout
+  behavior is unchanged. Pipe stages are emitted only when `T3_MESH_TEST_MODE=1`, which the mesh
+  fixture sets for every node. A pure `rolloutDecision` helper treats a first-machine
+  `rolled-back`/`failed` state as terminal and polls with the same 120 s budget at 250 ms. The SSH
+  banner stall that motivated the pipe tracing is still unexplained: these changes record and
+  localize it, and do not claim the whole mesh CI instability is fixed.
+- **Where.** `packages/shared/src/meshConfig/{identity.ts,identity.test.ts}`,
+  `apps/server/src/replicas/{MutagenRunner.ts,MutagenCommands.test.ts}`,
+  `apps/server/src/peer/connection/{PeerPipeIpc.ts,PeerSessions.ts,pipeDiagnostics.ts,pipeDiagnostics.test.ts}`,
+  `scripts/mesh-fast/{rollout.mjs,rollout-outcome.ts,rollout-outcome.test.ts,mesh.mjs}`.
+
 ### 2026-11-12 — Upstream release v0.1.9
 
 - **What.** Takes upstream v0.1.9 (198 changes, 31 contributors): approving agent sign-ins with
