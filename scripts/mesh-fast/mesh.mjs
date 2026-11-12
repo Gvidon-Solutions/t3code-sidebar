@@ -284,6 +284,7 @@ export class MiniMesh {
               : this.launcher || this.previousEntry
                 ? "0.075"
                 : "0.04",
+      T3_MESH_TEST_MODE: "1",
       NODE_ENV: "test",
       GOMAXPROCS: "2",
       NODE_COMPILE_CACHE: NodePath.join(process.env.MESH_FAST_RUNTIMES, "compile-cache"),
@@ -502,7 +503,6 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
         T3CODE_PORT: String(backend),
         T3CODE_HOST: "127.0.0.1",
         T3CODE_NO_BROWSER: "true",
-        T3_MESH_TEST_MODE: "1",
       });
       if (name === "laptop") env.T3_MESH_TEST_FAIL_HEALTH_VERSION = "0.1.6";
       serverArgs = [NodePath.join(installed, "t3"), "__service-launcher"];

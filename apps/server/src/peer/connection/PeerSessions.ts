@@ -34,6 +34,7 @@ import * as PeerLinks from "../PeerLinks.ts";
 import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
 import * as PeerFacts from "./PeerFacts.ts";
 import * as PeerTransport from "./PeerTransport.ts";
+import * as PipeDiagnostics from "./pipeDiagnostics.ts";
 import { PeerChannel, preferConnection } from "./PeerChannel.ts";
 import { PeerConnectionError } from "./PeerConnectionError.ts";
 import { forwardedCallLimits } from "../../mesh/MeshLinkPermissions.ts";
@@ -526,6 +527,7 @@ export const make = Effect.gen(function* () {
     target: string,
     stream: NodeStream.Duplex,
   ) {
+    yield* PipeDiagnostics.tracePipe("handle-start", { from, target });
     if (live.get(from)?.access !== "full-access")
       return yield* new PeerConnectionError({
         reason: "pipe",
@@ -546,18 +548,25 @@ export const make = Effect.gen(function* () {
           message: "A pipe relay needs a direct destination and at most one hop",
         });
       const remote = destination.channel.openPipe(inner);
+      PipeDiagnostics.observeFirstReadable(remote, (stage, fields) => {
+        void run(PipeDiagnostics.tracePipe(stage, { ...fields, side: "relay" }));
+      });
       bridge(stream, remote);
+      yield* PipeDiagnostics.tracePipe("relay-bridged", { target: inner });
       return;
     }
     if (target !== "sshd") {
       stream.destroy(new Error(`Unknown peer pipe target ${target}`));
       return;
     }
-    const socket = yield* connector.connect({
-      host: "127.0.0.1",
-      port: selfFacts.sshd?.port ?? 22,
+    const port = selfFacts.sshd?.port ?? 22;
+    const socket = yield* connector.connect({ host: "127.0.0.1", port });
+    yield* PipeDiagnostics.tracePipe("connector-connected", { port });
+    PipeDiagnostics.observeFirstReadable(socket, (stage, fields) => {
+      void run(PipeDiagnostics.tracePipe(stage, { ...fields, side: "connector" }));
     });
     bridge(stream, socket);
+    yield* PipeDiagnostics.tracePipe("bridged", { port });
   });
 
   const dispatchCall = Effect.fn("PeerSessions.dispatchCall")(function* (
@@ -744,6 +753,11 @@ export const make = Effect.gen(function* () {
           });
           runBackground(
             handlePipe(env, target, stream).pipe(
+              Effect.tapError((error) =>
+                PipeDiagnostics.tracePipe("handle-failed", {
+                  reason: isConnectionError(error) ? error.reason : "failed",
+                }),
+              ),
               Effect.catch((error) =>
                 Effect.sync(() => stream.destroy(new Error(messageOf(error), { cause: error }))),
               ),

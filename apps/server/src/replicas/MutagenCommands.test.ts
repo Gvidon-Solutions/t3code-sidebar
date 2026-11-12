@@ -101,3 +101,105 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
     expect(calls.at(-1)?.args).toEqual(["daemon", "stop"]);
   }),
 );
+
+it.effect("surfaces a bounded, redacted Mutagen failure reason", () =>
+  Effect.gen(function* () {
+    let failure: ProcessRunner.ProcessRunError | undefined;
+    let output: ProcessRunner.ProcessRunOutput = {
+      code: 1 as ProcessRunner.ProcessRunOutput["code"],
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      stdoutInvalidUtf8: false,
+      stderrInvalidUtf8: false,
+    };
+    const processes = Layer.succeed(ProcessRunner.ProcessRunner, {
+      run: () => (failure ? Effect.fail(failure) : Effect.succeed(output)),
+    });
+    yield* Effect.gen(function* () {
+      const runner = yield* Runner.MutagenRunner;
+      const create = () =>
+        runner.create({
+          name: "mesh-protected",
+          logicalHash: "test",
+          environmentTag: "test",
+          alpha: "/private/alpha",
+          beta: "/private/beta",
+          ignores: [],
+        });
+
+      output = {
+        ...output,
+        stderr:
+          "\u001b[31mError: unable to receive server magic number: EOF\n" +
+          "(error output: Connection timed out during banner exchange\n" +
+          "Connection to UNKNOWN port 65535 timed out)\u001b[0m",
+      };
+      let error = yield* create().pipe(Effect.flip);
+      expect(error.reason).toBe("mutagen");
+      expect(error.message).toContain("sync create");
+      expect(error.message).toContain("exit code 1");
+      expect(error.message).toContain("Connection timed out during banner exchange");
+      expect(error.message).not.toContain("\u001b");
+      expect(error.message).not.toContain("--no-global-configuration");
+      expect(error.message).not.toContain("/private/alpha");
+      expect(error.message).not.toContain("/private/beta");
+      expect(error.cause).toBe(output);
+
+      output = { ...output, stderr: "" };
+      error = yield* create().pipe(Effect.flip);
+      expect(error.message).toBe(
+        "Mutagen sync create failed with exit code 1 without stderr output.",
+      );
+      expect(error.cause).toBe(output);
+
+      output = {
+        ...output,
+        stderr:
+          "x".repeat(2_000) +
+          " connecting with https://mesher:supersecret@example.test/sync token=abc123",
+      };
+      error = yield* create().pipe(Effect.flip);
+      expect(error.message).toContain("sync create");
+      expect(error.message).toContain("exit code 1");
+      expect(error.message).toContain("<redacted>");
+      expect(error.message).not.toContain("supersecret");
+      expect(error.message).not.toContain("abc123");
+      expect(error.message.length).toBeLessThan(600);
+
+      failure = new ProcessRunner.ProcessTimeoutError({
+        command: "/isolated/bin/mutagen",
+        argumentCount: 2,
+        timeoutMs: 60_000,
+      });
+      error = yield* create().pipe(Effect.flip);
+      expect(error.reason).toBe("mutagen");
+      expect(error.message).toContain("sync create");
+      expect(error.message).toContain("timed out after 60000ms");
+      expect(error.cause).toBe(failure);
+    }).pipe(
+      Effect.provide(
+        Runner.layer.pipe(
+          Layer.provide(
+            Layer.succeed(
+              FileSystem.FileSystem,
+              FileSystem.makeNoop({
+                exists: () => Effect.succeed(true),
+              }),
+            ),
+          ),
+          Layer.provide(processes),
+          Layer.provide(Layer.succeed(HostProcess.Environment, { PATH: "fixture" })),
+          Layer.provide(
+            Layer.succeed(Installer.MutagenInstaller, {
+              executable: Effect.succeed("/isolated/bin/mutagen"),
+              dataDirectory: "/isolated/mutagen",
+            }),
+          ),
+        ),
+      ),
+    );
+  }),
+);

@@ -8,6 +8,8 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeURL from "node:url";
 import * as NodeEvents from "node:events";
 import { productRoot } from "./paths.mjs";
+import { sleep } from "../lib/shell.mjs";
+import { rolloutDecision } from "./rollout-outcome.ts";
 import { MiniMesh, allocatePort as port } from "./mesh.mjs";
 import { containerBoot } from "./boot.mjs";
 import { project, rpc, mcp, until, run, invariant } from "./helpers.mjs";
@@ -519,14 +521,57 @@ export const rolloutScenarios = {
         );
       }
       await mcp(studio, "t3_mesh_update", { version: "0.1.6" });
-      await until(
-        "second machine rolled back",
-        () => NodeFSP.readFile(NodePath.join(laptop.base, "runtime/service-state.json"), "utf8"),
-        (text) => {
-          const state = JSON.parse(text);
-          return state.activeVersion === "0.1.5" && state.update?.status === "rolled-back";
-        },
-      );
+      const readServiceState = async (file) => {
+        try {
+          return { state: JSON.parse(await NodeFSP.readFile(file, "utf8")) };
+        } catch (error) {
+          return error.code === "ENOENT"
+            ? {}
+            : { error: error instanceof Error ? error.message : String(error) };
+        }
+      };
+      const readFreshServiceState = async () => {
+        try {
+          return {
+            state: JSON.parse(
+              await run("docker", [
+                "exec",
+                fresh,
+                "cat",
+                NodePath.join(base, "runtime/service-state.json"),
+              ]),
+            ),
+          };
+        } catch (error) {
+          const detail = `${error.stderr ?? ""} ${error.message ?? ""}`;
+          if (/No such file or directory/.test(detail)) return {};
+          return { error: error instanceof Error ? error.message : String(error) };
+        }
+      };
+      const rolloutDeadline = Date.now() + 120_000;
+      let decision;
+      while (Date.now() < rolloutDeadline) {
+        decision = rolloutDecision(
+          [
+            {
+              name: rootNode.name,
+              role: "first",
+              ...(await readFreshServiceState()),
+            },
+            {
+              name: laptop.name,
+              role: "second",
+              ...(await readServiceState(NodePath.join(laptop.base, "runtime/service-state.json"))),
+            },
+          ],
+          { targetVersion: "0.1.6", secondVersion: "0.1.5" },
+        );
+        if (decision.status === "expected") break;
+        if (decision.status === "failed") throw Error(decision.reason);
+        await sleep(250);
+      }
+      if (decision?.status !== "expected")
+        throw Error("rollout did not reach the expected outcome: " + JSON.stringify(decision));
       const versions = await until(
         "rolled back API and updated peer ready",
         async () => {

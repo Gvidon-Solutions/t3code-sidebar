@@ -134,6 +134,40 @@ export class MutagenRunner extends Context.Service<
 >()("t3/replicas/MutagenRunner") {}
 
 const isReplicaError = Schema.is(ReplicaError);
+const MAX_FAILURE_DETAIL_CHARS = 512;
+const ANSI_ESCAPE = /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
+const CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
+// Query credentials stay valid after the request; keep them out of user-visible errors.
+const URL_CREDENTIAL_PARAMS = /(^|[?&"\s])(wsTicket|dpop)=[^&#"\\\s]*/g;
+const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi;
+const SECRET_ASSIGNMENT =
+  /\b([a-z0-9_.-]*(?:token|secret|password|passwd|credential|private[_-]?key|access[_-]?key)[a-z0-9_.-]*)\s*[=:]\s*("[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const PRIVATE_KEY_BLOCK =
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+
+const boundedFailureDetail = (text: string): string | undefined => {
+  const normalized = text
+    .replace(ANSI_ESCAPE, "")
+    .replace(PRIVATE_KEY_BLOCK, "<redacted private key>")
+    .replace(URL_CREDENTIAL_PARAMS, "$1$2=<redacted>")
+    .replace(URL_USERINFO, "$1<redacted>@")
+    .replace(SECRET_ASSIGNMENT, "$1=<redacted>")
+    .replace(CONTROL_CHARACTERS, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized.length === 0) return undefined;
+  return normalized.length <= MAX_FAILURE_DETAIL_CHARS
+    ? normalized
+    : `…${normalized.slice(-(MAX_FAILURE_DETAIL_CHARS - 1))}`;
+};
+
+const operationOf = (args: ReadonlyArray<string>): string =>
+  (args[0] === "sync" || args[0] === "daemon") && args[1] !== undefined
+    ? `${args[0]} ${args[1]}`
+    : "command";
+
+const exitCodeOf = (code: number | null): string =>
+  code === null ? "no exit code" : `exit code ${code}`;
 const encodeString = Schema.encodeSync(Schema.fromJsonString(Schema.String));
 const encodeIgnores = Schema.encodeEffect(Schema.fromJsonString(Schema.Array(Schema.String)));
 const decodeManifest = Schema.decodeEffect(
@@ -173,17 +207,29 @@ const make = Effect.gen(function* () {
         timeout: "60 seconds",
       })
       .pipe(
-        Effect.mapError(
-          (cause) =>
-            new ReplicaError({ reason: "mutagen", message: "Mutagen process failed.", cause }),
-        ),
+        Effect.mapError((cause) => {
+          const detail = boundedFailureDetail(
+            cause instanceof Error ? cause.message : String(cause),
+          );
+          return new ReplicaError({
+            reason: "mutagen",
+            message: detail
+              ? `Mutagen ${operationOf(args)} could not run: ${detail}`
+              : `Mutagen ${operationOf(args)} could not run.`,
+            cause,
+          });
+        }),
       );
-    if (result.code !== 0)
+    if (result.code !== 0) {
+      const detail = boundedFailureDetail(result.stderr);
       return yield* new ReplicaError({
         reason: "mutagen",
-        message: "Mutagen command failed.",
+        message: detail
+          ? `Mutagen ${operationOf(args)} failed with ${exitCodeOf(result.code)}: ${detail}`
+          : `Mutagen ${operationOf(args)} failed with ${exitCodeOf(result.code)} without stderr output.`,
         cause: result,
       });
+    }
     if (!foreign) privateDaemonUsed = !(args[0] === "daemon" && args[1] === "stop");
     return result.stdout;
   });

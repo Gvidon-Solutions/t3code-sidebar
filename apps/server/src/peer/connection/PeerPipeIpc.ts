@@ -17,6 +17,7 @@ import {
   securePipeAddress,
 } from "../../platform/ServerPlatform.ts";
 import { PeerSessions, PeerConnectionError } from "./PeerSessions.ts";
+import * as PipeDiagnostics from "./pipeDiagnostics.ts";
 
 const Request = Schema.Struct({ machine: Schema.String, target: Schema.Literal("sshd") });
 const Response = Schema.Union([
@@ -141,13 +142,16 @@ export const layer = Layer.effectDiscard(
             });
             const controller = new AbortController();
             socket.once("close", () => controller.abort());
+            void run(PipeDiagnostics.tracePipe("ipc-accepted"));
             void (async () => {
               try {
                 const line = await readLine(socket, { maxBytes: 8192, timeoutMs: 15000 });
                 const request = decodeRequest(line);
+                void run(PipeDiagnostics.tracePipe("ipc-request", { target: request.target }));
                 const id = await run(resolveMachine(request.machine), {
                   signal: controller.signal,
                 });
+                void run(PipeDiagnostics.tracePipe("ipc-resolved"));
                 const stream = await run(
                   sessions.openPipe({
                     environmentId: id,
@@ -155,9 +159,19 @@ export const layer = Layer.effectDiscard(
                     signal: controller.signal,
                   }),
                 );
+                void run(PipeDiagnostics.tracePipe("ipc-open-resolved"));
+                PipeDiagnostics.observeFirstReadable(stream, (stage, fields) => {
+                  void run(PipeDiagnostics.tracePipe(stage, { ...fields, side: "ipc-stream" }));
+                });
                 socket.write(`${encode({ ok: true })}\n`);
                 bridge(socket, stream);
+                void run(PipeDiagnostics.tracePipe("ipc-bridged"));
               } catch (error) {
+                void run(
+                  PipeDiagnostics.tracePipe("ipc-failed", {
+                    message: error instanceof Error ? error.message : "Mesh pipe failed",
+                  }),
+                );
                 socket.end(
                   `${encode({ ok: false, error: error instanceof Error ? error.message : "Mesh pipe failed" })}\n`,
                 );
