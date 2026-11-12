@@ -1,5 +1,6 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off -- Exercises banner observation against a private in-memory stream without consuming bytes.
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off -- Exercises banner observation against a private in-memory stream without consuming bytes.
 import * as NodeStream from "node:stream";
+import * as NodeStreamPromises from "node:stream/promises";
 import { afterEach, expect, it } from "vite-plus/test";
 import { observeFirstReadable } from "./pipeDiagnostics.ts";
 
@@ -9,21 +10,34 @@ afterEach(() => {
   else process.env.T3_MESH_TEST_MODE = previous;
 });
 
-it("observes the first readable banner without consuming any bytes", async () => {
+it("observes the first piped data chunk without consuming buffered or later bytes", async () => {
   process.env.T3_MESH_TEST_MODE = "1";
-  const stream = new NodeStream.PassThrough();
-  const readable = new Promise<void>((resolve) => stream.once("readable", () => resolve()));
-  let observed: { stage: string; bufferedBytes: number } | undefined;
-  observeFirstReadable(stream, (stage, fields) => {
-    observed = { stage, bufferedBytes: fields.bufferedBytes ?? -1 };
+  const source = new NodeStream.PassThrough();
+  const sink = new NodeStream.PassThrough();
+  const banner = Buffer.from("SSH-2.0-OpenSSH banner\r\n");
+  const later = Buffer.from("payload after the banner\n");
+  source.write(banner);
+
+  let observed: { stage: string; bytes: number } | undefined;
+  let markObserved = () => {};
+  const firstObserved = new Promise<void>((resolve) => {
+    markObserved = resolve;
   });
-  const payload = Buffer.from("SSH-2.0-OpenSSH banner\r\n");
-  stream.end(payload);
-  await readable;
+  observeFirstReadable(source, (stage, fields) => {
+    observed = { stage, bytes: fields.bufferedBytes ?? -1 };
+    markObserved();
+  });
   const chunks: Buffer[] = [];
-  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
-  expect(observed).toEqual({ stage: "readable", bufferedBytes: payload.length });
-  expect(Buffer.concat(chunks)).toEqual(payload);
+  sink.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+  source.pipe(sink);
+  await firstObserved;
+  source.write(later);
+  source.end();
+  await NodeStreamPromises.finished(sink);
+
+  expect(observed?.stage).toBe("data");
+  expect(observed?.bytes).toBe(banner.length);
+  expect(Buffer.concat(chunks)).toEqual(Buffer.concat([banner, later]));
 });
 
 it("stays silent outside the fixture runtime", () => {
@@ -32,5 +46,6 @@ it("stays silent outside the fixture runtime", () => {
   observeFirstReadable(stream, () => {
     throw new Error("disabled pipe diagnostics must not report");
   });
+  expect(stream.listenerCount("data")).toBe(0);
   expect(stream.listenerCount("readable")).toBe(0);
 });

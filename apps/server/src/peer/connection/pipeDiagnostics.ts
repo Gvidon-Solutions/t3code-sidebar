@@ -12,11 +12,18 @@ export const tracePipe = (
     ? Effect.logInfo(`Mesh pipe ${stage}`, { ...fields, at: Date.now() })
     : Effect.void;
 
-/** Reports the first buffered bytes without reading or otherwise consuming them. */
+/**
+ * Records the first data chunk's byte count only; a prepended data tap starts
+ * flow on the next tick and keeps every byte for the synchronous bridge.
+ */
 export const observeFirstReadable = (
   stream: NodeStream.Readable,
   report: (stage: string, fields: Readonly<Record<string, number>>) => void,
 ) => {
   if (!pipeDiagnosticsEnabled()) return;
-  stream.once("readable", () => report("readable", { bufferedBytes: stream.readableLength }));
+  stream.prependOnceListener("data", (chunk: Buffer | string) =>
+    report("data", {
+      bufferedBytes: typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length,
+    }),
+  );
 };

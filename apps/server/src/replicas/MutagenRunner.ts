@@ -144,6 +144,14 @@ const SECRET_ASSIGNMENT =
   /\b([a-z0-9_.-]*(?:token|secret|password|passwd|credential|private[_-]?key|access[_-]?key)[a-z0-9_.-]*)\s*[=:]\s*("[^"]*"|'[^']*'|[^\s,;]+)/gi;
 const PRIVATE_KEY_BLOCK =
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+// Operator paths and SSH endpoints carry machine names, users, and private directories.
+// Keep the error text before them (banner timeouts, connection refusals) and drop the rest.
+const QUOTED_PATH = /(["'])(?:[A-Za-z]:[\\/]|\\\\|\/)[^"']*\1/g;
+const SCP_ENDPOINT = /(^|[\s"'(=:,;|])([A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9_.:-]+:\/)[^\s"']*/g;
+const BARE_USER_HOST = /(^|[\s"'(=:,;|])([A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9_.:-]+)/g;
+const WINDOWS_ABSOLUTE_PATH = /(^|[\s"'(=:,;|])([A-Za-z]:[\\/][^\s"']*)/g;
+const UNC_ABSOLUTE_PATH = /(^|[\s"'(=:,;|])(\\\\[^\s"']+)/g;
+const UNIX_ABSOLUTE_PATH = /(^|[\s"'(=:,;|[])(\/(?!\/)[^\s"']*)/g;
 
 const boundedFailureDetail = (text: string): string | undefined => {
   const normalized = text
@@ -152,6 +160,12 @@ const boundedFailureDetail = (text: string): string | undefined => {
     .replace(URL_CREDENTIAL_PARAMS, "$1$2=<redacted>")
     .replace(URL_USERINFO, "$1<redacted>@")
     .replace(SECRET_ASSIGNMENT, "$1=<redacted>")
+    .replace(QUOTED_PATH, "<redacted path>")
+    .replace(SCP_ENDPOINT, "$1<redacted scp endpoint>")
+    .replace(BARE_USER_HOST, "$1<redacted host>")
+    .replace(WINDOWS_ABSOLUTE_PATH, "$1<redacted path>")
+    .replace(UNC_ABSOLUTE_PATH, "$1<redacted path>")
+    .replace(UNIX_ABSOLUTE_PATH, "$1<redacted path>")
     .replace(CONTROL_CHARACTERS, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -168,6 +182,32 @@ const operationOf = (args: ReadonlyArray<string>): string =>
 
 const exitCodeOf = (code: number | null): string =>
   code === null ? "no exit code" : `exit code ${code}`;
+
+/**
+ * Process runner failures embed the absolute command and working directory in
+ * their `message`. Never forward that message: name only the typed tag, plus the
+ * timeout when it is part of the schema. The full typed cause still travels on
+ * the ReplicaError for diagnostics.
+ */
+const describeRunFailure = (cause: unknown): string => {
+  if (typeof cause !== "object" || cause === null || !("_tag" in cause)) return "could not run";
+  const tag = (cause as { readonly _tag?: unknown })._tag;
+  switch (tag) {
+    case "ProcessTimeoutError": {
+      const timeoutMs = (cause as { readonly timeoutMs?: unknown }).timeoutMs;
+      return typeof timeoutMs === "number"
+        ? `timed out after ${timeoutMs}ms (${tag})`
+        : `timed out (${tag})`;
+    }
+    case "ProcessSpawnError":
+    case "ProcessStdinError":
+    case "ProcessOutputLimitError":
+    case "ProcessReadError":
+      return `could not run (${tag})`;
+    default:
+      return "could not run";
+  }
+};
 const encodeString = Schema.encodeSync(Schema.fromJsonString(Schema.String));
 const encodeIgnores = Schema.encodeEffect(Schema.fromJsonString(Schema.Array(Schema.String)));
 const decodeManifest = Schema.decodeEffect(
@@ -207,18 +247,14 @@ const make = Effect.gen(function* () {
         timeout: "60 seconds",
       })
       .pipe(
-        Effect.mapError((cause) => {
-          const detail = boundedFailureDetail(
-            cause instanceof Error ? cause.message : String(cause),
-          );
-          return new ReplicaError({
-            reason: "mutagen",
-            message: detail
-              ? `Mutagen ${operationOf(args)} could not run: ${detail}`
-              : `Mutagen ${operationOf(args)} could not run.`,
-            cause,
-          });
-        }),
+        Effect.mapError(
+          (cause) =>
+            new ReplicaError({
+              reason: "mutagen",
+              message: `Mutagen ${operationOf(args)} ${describeRunFailure(cause)}.`,
+              cause,
+            }),
+        ),
       );
     if (result.code !== 0) {
       const detail = boundedFailureDetail(result.stderr);

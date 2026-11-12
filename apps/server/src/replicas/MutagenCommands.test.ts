@@ -169,6 +169,32 @@ it.effect("surfaces a bounded, redacted Mutagen failure reason", () =>
       expect(error.message).not.toContain("abc123");
       expect(error.message.length).toBeLessThan(600);
 
+      output = {
+        ...output,
+        stderr:
+          "scp: operator@private-host:/home/operator/secret/file: Permission denied; " +
+          "ssh: connect to host operator@private-host: Connection timed out during banner exchange",
+      };
+      error = yield* create().pipe(Effect.flip);
+      expect(error.message).toContain("Permission denied");
+      expect(error.message).toContain("Connection timed out during banner exchange");
+      expect(error.message).not.toContain("operator@private-host");
+      expect(error.message).not.toContain("/home/operator");
+      expect(error.message).toContain("<redacted scp endpoint>");
+
+      output = {
+        ...output,
+        stderr:
+          "open '/home/operator/secret dir/file.txt' failed; " +
+          "read C:\\Users\\operator\\secret\\file.txt failed; " +
+          "read C:/Users/operator/secret/file.txt failed",
+      };
+      error = yield* create().pipe(Effect.flip);
+      expect(error.message).toContain("failed");
+      for (const value of ["secret dir", "file.txt", "C:\\Users", "C:/Users", "operator"])
+        expect(error.message).not.toContain(value);
+      expect(error.message.match(/<redacted path>/g)?.length).toBeGreaterThanOrEqual(3);
+
       failure = new ProcessRunner.ProcessTimeoutError({
         command: "/isolated/bin/mutagen",
         argumentCount: 2,
@@ -179,6 +205,91 @@ it.effect("surfaces a bounded, redacted Mutagen failure reason", () =>
       expect(error.message).toContain("sync create");
       expect(error.message).toContain("timed out after 60000ms");
       expect(error.cause).toBe(failure);
+    }).pipe(
+      Effect.provide(
+        Runner.layer.pipe(
+          Layer.provide(
+            Layer.succeed(
+              FileSystem.FileSystem,
+              FileSystem.makeNoop({
+                exists: () => Effect.succeed(true),
+              }),
+            ),
+          ),
+          Layer.provide(processes),
+          Layer.provide(Layer.succeed(HostProcess.Environment, { PATH: "fixture" })),
+          Layer.provide(
+            Layer.succeed(Installer.MutagenInstaller, {
+              executable: Effect.succeed("/isolated/bin/mutagen"),
+              dataDirectory: "/isolated/mutagen",
+            }),
+          ),
+        ),
+      ),
+    );
+  }),
+);
+
+it.effect("keeps process runner paths out of public Mutagen failures", () =>
+  Effect.gen(function* () {
+    const command = "/private/synthetic/bin/mutagen";
+    const cwd = "/private/synthetic/work";
+    const spawnCwd = "/private/synthetic/spawn";
+    const resolvedCommand = "/private/synthetic/resolved/mutagen";
+    let failure: ProcessRunner.ProcessRunError = new ProcessRunner.ProcessSpawnError({
+      command,
+      argumentCount: 2,
+      cwd,
+      spawnCwd,
+      resolvedCommand,
+      cause: new Error("spawn failed for operator@private-host:/private/synthetic/detail"),
+    });
+    const processes = Layer.succeed(ProcessRunner.ProcessRunner, {
+      run: () => Effect.fail(failure),
+    });
+    yield* Effect.gen(function* () {
+      const runner = yield* Runner.MutagenRunner;
+      const create = () =>
+        runner.create({
+          name: "mesh-protected",
+          logicalHash: "test",
+          environmentTag: "test",
+          alpha: "/private/alpha",
+          beta: "/private/beta",
+          ignores: [],
+        });
+      const assertSafe = (message: string) => {
+        for (const value of [
+          command,
+          cwd,
+          spawnCwd,
+          resolvedCommand,
+          "/private",
+          "synthetic",
+          "operator@private-host",
+        ])
+          expect(message).not.toContain(value);
+      };
+
+      const spawned = yield* create().pipe(Effect.flip);
+      expect(spawned.reason).toBe("mutagen");
+      expect(spawned.message).toBe("Mutagen sync create could not run (ProcessSpawnError).");
+      assertSafe(spawned.message);
+      expect(spawned.cause).toBe(failure);
+
+      failure = new ProcessRunner.ProcessTimeoutError({
+        command,
+        argumentCount: 2,
+        cwd,
+        spawnCwd,
+        timeoutMs: 60_000,
+      });
+      const timedOut = yield* create().pipe(Effect.flip);
+      expect(timedOut.message).toBe(
+        "Mutagen sync create timed out after 60000ms (ProcessTimeoutError).",
+      );
+      assertSafe(timedOut.message);
+      expect(timedOut.cause).toBe(failure);
     }).pipe(
       Effect.provide(
         Runner.layer.pipe(
