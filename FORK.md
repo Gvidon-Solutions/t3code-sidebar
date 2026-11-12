@@ -188,7 +188,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   build left half-reconciled is rewound to its contiguous prefix and refilled. Peer pairing omits
   the app-approval opt-in, so the SQL gate cannot match an approval row; MCP logs an error at
   startup when its client authenticator is not wired.
-- **How.** `LEGACY_FORK_MIGRATION_IDS` is exported with a null target for the old 82 receipt row;
+- **How.** `LEGACY_FORK_MIGRATION_IDS` carries a null target for the old 82 receipt row;
   the reconcile deletes that row and lets 1002-1004 run, and fills any known hole. The reconcile
   and both ledger assertions share one transaction, so a refusal rolls back. `recordedMigrations`
   tags each row with its ledger. Tests seed the live 80-84 shape, the `bc0a8f1f26` 80/81/82 shape,

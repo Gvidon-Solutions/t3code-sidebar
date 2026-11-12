@@ -3,12 +3,12 @@ const { test } = NodeTest;
 import * as NodeAssert from "node:assert/strict";
 const assert = NodeAssert;
 import {
-  encode,
   receive,
   adoptLegacy,
   materialize,
   importLegacy,
 } from "../../../packages/shared/src/meshLayout/index.ts";
+import { encode } from "../../../packages/shared/src/meshLayout/diff.ts";
 import { encodeLegacyEntries, importLegacyEntries } from "./scripts/t3ctl.mjs";
 const empty = materialize({});
 

@@ -26,6 +26,8 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y openssh-server patchelf && sudo mkdir -p /run/sshd
       - run: sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /data/mf
       - run: pnpm install --frozen-lockfile
+      - name: Agent kit tests (t3ctl, layout parity)
+        run: node --test agent-kit/skills/t3/*.test.mjs agent-kit/skills/t3/scripts/*.test.mjs
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
