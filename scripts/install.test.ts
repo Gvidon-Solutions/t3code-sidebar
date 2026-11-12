@@ -146,18 +146,21 @@ async function installOver(input: {
     input.script === "install.sh"
       ? ["sh", [installer]]
       : ["powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer]];
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    T3CODE_CHANNEL: "",
+    T3CODE_VERSION: "1.2.3",
+    T3CODE_HOME: input.home,
+    T3CODE_INSTALL_BIN_DIR: input.binDir,
+    T3CODE_RELEASE_BASE_URL: "http://127.0.0.1:9",
+    ...input.env,
+  };
+  // A wrapper such as T3's run shims can set ZDOTDIR; the installer would then edit that rc.
+  delete env.ZDOTDIR;
   const result = NodeChildProcess.spawnSync(command, args, {
     encoding: "utf8",
     ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
-    env: {
-      ...process.env,
-      T3CODE_CHANNEL: "",
-      T3CODE_VERSION: "1.2.3",
-      T3CODE_HOME: input.home,
-      T3CODE_INSTALL_BIN_DIR: input.binDir,
-      T3CODE_RELEASE_BASE_URL: "http://127.0.0.1:9",
-      ...input.env,
-    },
+    env,
   });
   return { code: result.status, output: `${result.stdout}${result.stderr}`, target };
 }
