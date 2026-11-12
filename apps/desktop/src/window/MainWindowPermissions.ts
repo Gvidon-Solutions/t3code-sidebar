@@ -1,13 +1,24 @@
 import * as Electron from "electron";
 
+import { serverUiRendererId } from "../ipc/rendererTrust.ts";
+
 export type MediaPermissionDecision = "grant" | "deny" | "ask-microphone";
 
-/** Whether `url` belongs to the app shell served from `appUrl` (e.g. `t3code://app/`). */
+/**
+ * Whether `url` belongs to the app shell served from `appUrl` (e.g. `t3code://app/`).
+ * Sidebar fork: the packaged window URL carries `?desktopWindowId=N`, so this
+ * compares scheme and host instead of a string prefix, and also accepts this
+ * window's server UI host (`server-N-<hash>`), which renders the same app.
+ */
 export function isAppUrl(url: string | undefined, appUrl: string): boolean {
   if (!url) return false;
-  // Custom schemes have an opaque WHATWG origin, so compare the serialized prefix.
-  const appOrigin = appUrl.endsWith("/") ? appUrl.slice(0, -1) : appUrl;
-  return url === appOrigin || url.startsWith(`${appOrigin}/`);
+  const app = URL.parse(appUrl);
+  const target = URL.parse(url);
+  if (app === null || target === null || app.host === "") return false;
+  if (target.protocol !== app.protocol) return false;
+  if (target.host === app.host) return true;
+  const windowId = app.searchParams.get("desktopWindowId");
+  return windowId !== null && serverUiRendererId(target.host) === Number(windowId);
 }
 
 /**

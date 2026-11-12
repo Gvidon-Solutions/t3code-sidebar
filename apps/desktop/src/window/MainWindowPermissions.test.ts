@@ -23,11 +23,31 @@ describe("isAppUrl", () => {
     expect(isAppUrl("https://example.com/", APP_URL)).toBe(false);
     expect(isAppUrl(undefined, APP_URL)).toBe(false);
   });
+
+  it("matches the packaged window URL that carries its window id", () => {
+    const packaged = "t3code://app/?desktopWindowId=7";
+    expect(isAppUrl("t3code://app", packaged)).toBe(true);
+    expect(isAppUrl("t3code://app/settings/voice", packaged)).toBe(true);
+    expect(isAppUrl(`t3code://server-7-${"a".repeat(24)}/settings`, packaged)).toBe(true);
+    expect(isAppUrl(`t3code://server-8-${"a".repeat(24)}/settings`, packaged)).toBe(false);
+    expect(isAppUrl(`t3code://server-7-${"a".repeat(24)}/`, APP_URL)).toBe(false);
+    expect(isAppUrl("https://app/", packaged)).toBe(false);
+  });
 });
 
 describe("decideMainWindowMediaRequest", () => {
   it("denies media to frames outside the app shell", () => {
     expect(decide({ requestingUrl: "https://example.com/embed" })).toBe("deny");
+  });
+
+  it("lets the packaged app shell use the microphone (it was always denied)", () => {
+    expect(
+      decide({
+        appUrl: "t3code://app/?desktopWindowId=3",
+        requestingUrl: "t3code://app/settings/voice",
+        platform: "linux",
+      }),
+    ).toBe("grant");
   });
 
   it("asks macOS for the microphone until the user has granted it", () => {
