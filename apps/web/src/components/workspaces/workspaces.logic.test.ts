@@ -21,6 +21,7 @@ import {
   reorderWorkspaces,
   resolveProjectWorkspaceId,
   workspaceMark,
+  scratchFolderEnvironment,
 } from "./workspaces.logic";
 
 const config: SidebarWorkspacesConfig = {
@@ -242,5 +243,41 @@ describe("folderRowActivation", () => {
       "studio: Not connected to this device. Opens Connections to fix it.",
     );
     expect(folderRowAriaLabel("studio", false)).toBeUndefined();
+  });
+});
+
+describe("scratchFolderEnvironment", () => {
+  it("keeps the app shell's own pick", () => {
+    expect(
+      scratchFolderEnvironment({
+        preferred: "gv",
+        offering: ["op", "gv"],
+        threadEnvironmentIds: ["op"],
+      }),
+    ).toBe("gv");
+  });
+
+  it("starts on the newest thread's machine when a desktop app has no own server", () => {
+    // Several machines offer scratch, so the shell has no pick; the button used to do nothing.
+    expect(
+      scratchFolderEnvironment({
+        preferred: null,
+        offering: ["gv", "op"],
+        threadEnvironmentIds: ["op", "gv"],
+      }),
+    ).toBe("op");
+  });
+
+  it("skips machines that cannot start scratch, then falls back to sidebar order", () => {
+    expect(
+      scratchFolderEnvironment({
+        preferred: null,
+        offering: ["gv", "op"],
+        threadEnvironmentIds: ["ve"],
+      }),
+    ).toBe("gv");
+    expect(
+      scratchFolderEnvironment({ preferred: null, offering: [], threadEnvironmentIds: ["op"] }),
+    ).toBeNull();
   });
 });

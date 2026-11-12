@@ -201,6 +201,7 @@ import {
   type ProjectFoldMode,
   reorderWorkspaces,
   resolveProjectWorkspaceIds,
+  scratchFolderEnvironment,
   setProjectFoldMode,
   sortWorkspaceProjects,
   toggleProjectWorkspace,
@@ -806,8 +807,24 @@ export default function WorkspaceSidebar() {
   };
   const startThreadInFolder = (folder: FolderModel) => {
     if (folder.isScratch) {
-      const environmentId = scratch.scratchEnvironmentId(primaryEnvironmentId);
-      if (environmentId !== null) void scratch.startScratchThread(environmentId);
+      const environmentId = scratchFolderEnvironment({
+        preferred: scratch.scratchEnvironmentId(primaryEnvironmentId),
+        offering: environments
+          .map((environment) => environment.environmentId)
+          .filter((id) => scratch.scratchWorkspaceRootFor(id) !== null),
+        threadEnvironmentIds: [...folder.active, ...folder.settled, ...folder.all].map(
+          (thread) => thread.environmentId,
+        ),
+      });
+      if (environmentId === null) {
+        failureToast(
+          "Could not create thread",
+          new Error("No connected machine can start a thread without a project."),
+        );
+        return;
+      }
+      if (isMobile) setOpenMobile(false);
+      void scratch.startScratchThread(environmentId);
       return;
     }
     const member =

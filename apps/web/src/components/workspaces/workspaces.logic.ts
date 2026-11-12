@@ -174,3 +174,18 @@ export function folderRowAriaLabel(label: string, offline: boolean): string | un
     ? `${label}: Not connected to this device. Opens Connections to fix it.`
     : undefined;
 }
+
+/**
+ * Which machine the No project folder starts a thread on. The app shell picks
+ * first; a desktop app without its own server has no pick when several machines
+ * offer scratch, so the folder's newest thread decides, then sidebar order.
+ */
+export function scratchFolderEnvironment<Id extends string>(input: {
+  readonly preferred: Id | null;
+  readonly offering: readonly Id[];
+  readonly threadEnvironmentIds: readonly Id[];
+}): Id | null {
+  if (input.preferred !== null) return input.preferred;
+  const offered = new Set<string>(input.offering);
+  return input.threadEnvironmentIds.find((id) => offered.has(id)) ?? input.offering[0] ?? null;
+}
