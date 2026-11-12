@@ -108,8 +108,11 @@ if (filter === "@host-info") {
   process.exit(0);
 }
 if (!selected.length) throw Error(`No scenarios match ${filter}`);
-const artifactsDirectory = host.artifactsDirectory;
-await NodeFSP.mkdir(artifactsDirectory, { recursive: true });
+await NodeFSP.mkdir(host.artifactsDirectory, { recursive: true });
+// Fixture paths are matched against process.cwd(), which resolves symlinks. Keep the whole run
+// under its real path so a symlinked artifacts directory cannot make a replica look local.
+const artifactsDirectory = await NodeFSP.realpath(host.artifactsDirectory);
+host.artifactsDirectory = artifactsDirectory;
 const root = await NodeFSP.mkdtemp(NodePath.join(artifactsDirectory, "mesh-fast-"));
 await NodeFSP.writeFile(NodePath.join(root, "runner.json"), JSON.stringify(host));
 console.log(`Host: ${owner.hostname}; cores ${owner.cores}; meshes ${jobs}; container boots 2`);
