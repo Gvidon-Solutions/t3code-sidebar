@@ -113,7 +113,7 @@ export const UI_REQUESTS_WS_METHODS = {
 } as const;
 
 /** Requests from now on; nothing is replayed to a client that connects later. */
-export const WsUiRequestsSubscribeRpc = Rpc.make(UI_REQUESTS_WS_METHODS.subscribe, {
+const WsUiRequestsSubscribeRpc = Rpc.make(UI_REQUESTS_WS_METHODS.subscribe, {
   payload: Schema.Struct({}),
   success: UiRequest,
   error: EnvironmentAuthorizationError,
@@ -121,7 +121,7 @@ export const WsUiRequestsSubscribeRpc = Rpc.make(UI_REQUESTS_WS_METHODS.subscrib
 });
 
 /** Voice commands from now on, apart from `ui_open` so older clients never see them. */
-export const WsUiRequestsSubscribeVoiceCommandsRpc = Rpc.make(
+const WsUiRequestsSubscribeVoiceCommandsRpc = Rpc.make(
   UI_REQUESTS_WS_METHODS.subscribeVoiceCommands,
   {
     payload: Schema.Struct({}),

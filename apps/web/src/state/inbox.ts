@@ -18,7 +18,7 @@ import { environmentSummaries } from "./presentation";
 export const inboxAtoms = createInboxAtoms(connectionAtomRuntime);
 
 /** How many closed issues every environment's subscription includes. */
-export const inboxClosedLimitAtom = Atom.make(INBOX_CLOSED_PAGE_SIZE).pipe(
+const inboxClosedLimitAtom = Atom.make(INBOX_CLOSED_PAGE_SIZE).pipe(
   Atom.keepAlive,
   Atom.withLabel("web-inbox-closed-limit"),
 );
@@ -58,8 +58,4 @@ export const inboxStateAtom = Atom.make((get): InboxState => {
 
 export function useInboxState(): InboxState {
   return useAtomValue(inboxStateAtom);
-}
-
-export function useInboxClosedLimit(): number {
-  return useAtomValue(inboxClosedLimitAtom);
 }

@@ -7,7 +7,7 @@ import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentSummaries } from "./presentation";
 
 /** Fork: agents asking this client to show something (`ui_open`). */
-export const uiRequestAtoms = createUiRequestAtoms(connectionAtomRuntime);
+const uiRequestAtoms = createUiRequestAtoms(connectionAtomRuntime);
 
 export interface EnvironmentUiRequest {
   readonly environmentId: EnvironmentId;

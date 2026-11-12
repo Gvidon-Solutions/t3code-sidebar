@@ -18,7 +18,7 @@ export const replicaStatusEnvironment = createReplicaStatusAtoms(connectionAtomR
  * One stream per connected environment that advertises the mesh RPCs, merged by
  * (logicalKey, environmentId). A server without the capability is skipped.
  */
-export const replicaStatusesAtom = Atom.make((get): ReadonlyArray<ReplicaLiveStatus> => {
+const replicaStatusesAtom = Atom.make((get): ReadonlyArray<ReplicaLiveStatus> => {
   const configs = get(environmentServerConfigsAtom);
   const connected = get(environmentSummaries.connectedEnvironmentIdsAtom);
   const lists: Array<{

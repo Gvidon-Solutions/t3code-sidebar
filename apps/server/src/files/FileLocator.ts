@@ -126,7 +126,7 @@ export interface NormalisedLocatePath {
 }
 
 /** The one place a raw link, chat path or agent string becomes a path and a position. */
-export const normaliseLocatePath = (rawPath: string, home: string): NormalisedLocatePath => {
+const normaliseLocatePath = (rawPath: string, home: string): NormalisedLocatePath => {
   let value = stripWrappingQuotes(rawPath.trim());
   const machine = parseT3FileLink(value);
   if (machine !== null) value = machine.absolutePath;

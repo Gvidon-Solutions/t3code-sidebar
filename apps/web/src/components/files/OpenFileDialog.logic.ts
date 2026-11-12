@@ -1,8 +1,8 @@
 import { addRecentFile, parseT3FileLink } from "@t3tools/client-runtime/files";
 import type { EnvironmentId } from "@t3tools/contracts";
 
-export const RECENT_FILES_STORAGE_PREFIX = "t3code:recent-files:";
-export const RECENT_FILES_LIMIT = 12;
+const RECENT_FILES_STORAGE_PREFIX = "t3code:recent-files:";
+const RECENT_FILES_LIMIT = 12;
 
 export function recentFilesStorageKey(environmentId: EnvironmentId): string {
   return `${RECENT_FILES_STORAGE_PREFIX}${environmentId}`;

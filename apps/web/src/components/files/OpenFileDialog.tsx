@@ -29,7 +29,7 @@ import {
   rememberRecentFile,
   resolveOpenFilePath,
 } from "./OpenFileDialog.logic";
-import { openOpenFileDialog, useOpenFileDialogStore } from "./openFileDialogState";
+import { useOpenFileDialogStore } from "./openFileDialogState";
 
 const LIST_LIMIT = 50;
 
@@ -284,5 +284,3 @@ export function OpenFileDialog() {
     />
   );
 }
-
-export { openOpenFileDialog };

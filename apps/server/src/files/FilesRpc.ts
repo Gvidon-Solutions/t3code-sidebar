@@ -26,8 +26,8 @@ import * as FilesService from "./FilesService.ts";
 /** The tool a peer exposes for a forwarded read; only this server calls it. */
 export const FILES_READ_TOOL = "t3_files_read";
 export const FILES_LIST_TOOL = "t3_files_list";
-export const FILES_STAT_TOOL = "t3_files_stat";
-export const FILES_READ_BYTES_TOOL = "t3_files_read_bytes";
+const FILES_STAT_TOOL = "t3_files_stat";
+const FILES_READ_BYTES_TOOL = "t3_files_read_bytes";
 
 /**
  * T3 Mesh (fork): reads and lists files on the machine named by the caller.

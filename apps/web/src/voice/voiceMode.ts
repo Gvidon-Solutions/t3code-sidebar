@@ -106,7 +106,7 @@ export function toggleThreadVoice(target: VoiceSessionTarget, availability: Voic
   void voiceMode.start(target);
 }
 
-export function voiceTargetRef(target: VoiceSessionTarget): ScopedThreadRef {
+function voiceTargetRef(target: VoiceSessionTarget): ScopedThreadRef {
   return scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId));
 }
 

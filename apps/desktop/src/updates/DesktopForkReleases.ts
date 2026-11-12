@@ -36,7 +36,7 @@ const decodeReleaseIndex = Schema.decodeUnknownEffect(Schema.fromJsonString(Rele
 const RELEASE_INDEX_TIMEOUT = Duration.seconds(20);
 
 /** The updater manifest a release must carry for this platform to install it. */
-export function updateManifestName(platform: NodeJS.Platform): string {
+function updateManifestName(platform: NodeJS.Platform): string {
   if (platform === "linux") return "latest-linux.yml";
   if (platform === "darwin") return "latest-mac.yml";
   return "latest.yml";

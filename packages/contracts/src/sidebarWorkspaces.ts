@@ -25,7 +25,7 @@ export const SidebarWorkspaceRule = Schema.Struct({
 });
 export type SidebarWorkspaceRule = typeof SidebarWorkspaceRule.Type;
 
-export const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
+const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
 
 /** How a machine tag is drawn: tinted background, solid fill or outline. */
 export const MachineTagStyle = Schema.Literals(["tinted", "solid", "outline"]);

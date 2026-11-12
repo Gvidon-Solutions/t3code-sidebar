@@ -26,7 +26,6 @@ export {
   effectiveDefaultWorkspaceId,
   globToRegExp,
   makeWorkspaceId,
-  moveProjectInOrder,
   normalizeWorkspaceLabel,
   reorderWorkspaces,
   resolveProjectWorkspaceId,
